@@ -1,0 +1,250 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+    background-color: #f5f7fa;
+    color: #333;
+}
+
+.container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* 侧边栏样式 - 优化为纯色背景 */
+.sidebar {
+    width: 260px;
+    background: #033f93;
+    color: white;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+    box-shadow: 2px 0 12px rgba(36, 119, 233, 0.15);
+}
+
+.sidebarHeader {
+    padding: 30px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebarHeader h2 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.sidebarNav {
+    padding: 20px 0;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    transition: all 0.3s ease;
+    gap: 12px;
+    position: relative;
+}
+
+.navItem:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    padding-left: 25px;
+}
+
+.navItem.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border-right: 4px solid white;
+    padding-left: 20px;
+    font-weight: 600;
+}
+
+.navItem svg {
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
+.navItem.active svg {
+    opacity: 1;
+}
+
+/* 主内容区样式 */
+.mainContent {
+    flex: 1;
+    margin-left: 260px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 顶部导航栏 - 优化阴影和背景 */
+.topBar {
+    background: white;
+    padding: 15px 30px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.topBarLeft h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    letter-spacing: -0.5px;
+}
+
+.topBarRight {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.userInfo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 8px 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.userName {
+    font-size: 14px;
+    color: #555;
+    font-weight: 500;
+}
+
+.logoutButton {
+    padding: 10px 24px;
+    background: #2477e9;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(36, 119, 233, 0.25);
+}
+
+.logoutButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(36, 119, 233, 0.35);
+    background: #1e6ad1;
+}
+
+.logoutButton:active {
+    transform: translateY(0);
+}
+
+/* 内容区域 */
+.contentArea {
+    flex: 1;
+    padding: 30px;
+    background: #f5f7fa;
+}
+
+/* 通用按钮样式 - 优化为统一的蓝色主题 */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.btnPrimary {
+    background: #2477e9;
+    color: white;
+    box-shadow: 0 4px 12px rgba(36, 119, 233, 0.25);
+}
+
+.btnPrimary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(36, 119, 233, 0.35);
+    background: #1e6ad1;
+}
+
+.btnPrimary:active {
+    transform: translateY(0);
+}
+
+.btnSuccess {
+    background: #10b981;
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btnSuccess:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+    background: #059669;
+}
+
+.btnSuccess:active {
+    transform: translateY(0);
+}
+
+.btnDanger {
+    background: #ef4444;
+    color: white;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.btnDanger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+    background: #dc2626;
+}
+
+.btnDanger:active {
+    transform: translateY(0);
+}
+
+.btnSecondary {
+    background: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+}
+
+.btnSecondary:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 200px;
+    }
+
+    .mainContent {
+        margin-left: 200px;
+    }
+
+    .topBar {
+        padding: 15px 20px;
+    }
+
+    .contentArea {
+        padding: 20px;
+    }
+
+    .userInfo {
+        padding: 6px 10px;
+    }
+}

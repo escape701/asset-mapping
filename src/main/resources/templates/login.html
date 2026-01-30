@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户登录 - 智能化资产测绘平台</title>
+    <link rel="stylesheet" href="/css/login.css">
+</head>
+<body>
+    <div class="loginContainer">
+        <div class="loginBox">
+            <h1 class="loginTitle">智能化资产测绘平台</h1>
+            <form id="loginForm" class="loginForm">
+                <div class="formGroup">
+                    <label for="username">用户名</label>
+                    <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                </div>
+                <div class="formGroup">
+                    <label for="password">密码</label>
+                    <div class="passwordWrapper">
+                        <input type="password" id="password" name="password" placeholder="请输入密码" required>
+                        <span class="passwordToggle" id="passwordToggle">
+                            <img class="eyeIcon" id="eyeIcon" src="/img/eyeIcon.svg" alt="显示密码" width="20" height="20">
+                            <img class="eyeOffIcon" id="eyeOffIcon" src="/img/eyeOffIcon.svg" alt="隐藏密码" width="20" height="20" style="display: none;">
+                        </span>
+                    </div>
+                </div>
+                <div class="formGroup">
+                    <button type="submit" class="loginButton">登录</button>
+                </div>
+                <div id="errorMessage" class="errorMessage" style="display: none;"></div>
+            </form>
+        </div>
+    </div>
+    <script src="/js/login.js"></script>
+</body>
+</html>
+

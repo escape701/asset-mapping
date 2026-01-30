@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - 智能化资产测绘平台</title>
+    <link rel="stylesheet" href="/css/common.css">
+    <link rel="stylesheet" href="/css/users.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebarHeader">
+                <h2>智能化资产测绘平台</h2>
+            </div>
+            <nav class="sidebarNav">
+                <a href="/index" class="navItem">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>首页</span>
+                </a>
+                <a href="/users" class="navItem active">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>用户管理</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="mainContent">
+            <!-- 顶部导航栏 -->
+            <header class="topBar">
+                <div class="topBarLeft">
+                    <h1>用户管理</h1>
+                </div>
+                <div class="topBarRight">
+                    <div class="userInfo">
+                        <span class="userName" id="userName">加载中...</span>
+                        <button class="logoutButton" id="logoutButton">退出登录</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 内容区域 -->
+            <div class="contentArea">
+                <div class="tableCard">
+                    <div class="tableHeader">
+                        <h3>用户列表</h3>
+                        <button class="btn btnPrimary" id="addUserButton">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            添加用户
+                        </button>
+                    </div>
+                    <div class="tableWrapper">
+                        <table class="dataTable">
+                            <thead>
+                                <tr>
+                                    <th>用户ID</th>
+                                    <th>用户名</th>
+                                    <th>真实姓名</th>
+                                    <th>邮箱</th>
+                                    <th>手机号</th>
+                                    <th>状态</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userTableBody">
+                                <tr>
+                                    <td colspan="8" class="emptyMessage">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 用户编辑模态框 -->
+    <div class="modal" id="userModal">
+        <div class="modalContent">
+            <div class="modalHeader">
+                <h3 id="modalTitle">添加用户</h3>
+                <span class="closeButton" id="closeModal">&times;</span>
+            </div>
+            <form id="userForm" class="modalBody">
+                <input type="hidden" id="userId" name="userId">
+                
+                <div class="formGroup">
+                    <label for="formUsername">用户名 *</label>
+                    <input type="text" id="formUsername" name="username" required>
+                </div>
+                
+                <div class="formGroup">
+                    <label for="formPassword">密码 <span id="passwordHint">(留空则不修改)</span></label>
+                    <input type="password" id="formPassword" name="password">
+                </div>
+                
+                <div class="formGroup">
+                    <label for="formRealName">真实姓名</label>
+                    <input type="text" id="formRealName" name="realName">
+                </div>
+                
+                <div class="formGroup">
+                    <label for="formEmail">邮箱</label>
+                    <input type="email" id="formEmail" name="email">
+                </div>
+                
+                <div class="formGroup">
+                    <label for="formPhone">手机号</label>
+                    <input type="tel" id="formPhone" name="phone">
+                </div>
+                
+                <div class="formGroup">
+                    <label for="formStatus">状态</label>
+                    <select id="formStatus" name="status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+            </form>
+            <div class="modalFooter">
+                <button type="button" class="btn btnSecondary" id="cancelButton">取消</button>
+                <button type="submit" class="btn btnPrimary" id="submitButton">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/users.js"></script>
+</body>
+</html>
+

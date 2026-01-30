@@ -1,0 +1,172 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+    background: url('/img/background.png') no-repeat center center fixed;
+    background-size: cover;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.loginContainer {
+    width: 100%;
+    max-width: 450px;
+    padding: 20px;
+}
+
+.loginBox {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 50px 40px;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.loginTitle {
+    text-align: center;
+    font-size: 28px;
+    color: #333;
+    margin-bottom: 40px;
+    font-weight: 600;
+}
+
+.loginForm {
+    width: 100%;
+}
+
+.formGroup {
+    margin-bottom: 25px;
+}
+
+.formGroup label {
+    display: block;
+    margin-bottom: 8px;
+    color: #555;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.formGroup input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.formGroup input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.passwordWrapper {
+    position: relative;
+}
+
+.passwordWrapper input {
+    padding-right: 45px;
+}
+
+.passwordToggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    transition: color 0.3s ease;
+}
+
+.passwordToggle:hover {
+    color: #667eea;
+}
+
+.eyeIcon,
+.eyeOffIcon {
+    display: block;
+}
+
+.loginButton {
+    width: 100%;
+    padding: 14px;
+    background: #2477e9;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.loginButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.loginButton:active {
+    transform: translateY(0);
+}
+
+.errorMessage {
+    background-color: #fee;
+    color: #c33;
+    padding: 12px 15px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 15px;
+    border-left: 4px solid #c33;
+    animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+    .loginBox {
+        padding: 40px 30px;
+    }
+    
+    .loginTitle {
+        font-size: 24px;
+    }
+}
+
+/* SVG图标样式 */
+.passwordToggle img {
+    display: block;
+    filter: invert(60%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(80%);
+    transition: filter 0.3s ease;
+}
+
+.passwordToggle:hover img {
+    filter: invert(45%) sepia(82%) saturate(1742%) hue-rotate(215deg) brightness(96%) contrast(90%);
+}

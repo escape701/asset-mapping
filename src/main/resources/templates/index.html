@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - 智能化资产测绘平台</title>
+    <link rel="stylesheet" href="/css/common.css">
+    <link rel="stylesheet" href="/css/index.css">
+</head>
+<body>
+<div class="container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebarHeader">
+            <h2>智能化资产测绘平台</h2>
+        </div>
+        <nav class="sidebarNav">
+            <a href="/index" class="navItem active">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>首页</span>
+            </a>
+            <a href="/users" class="navItem">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>用户管理</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="mainContent">
+        <!-- 顶部导航栏 -->
+        <header class="topBar">
+            <div class="topBarLeft">
+                <h1>首页</h1>
+            </div>
+            <div class="topBarRight">
+                <div class="userInfo">
+                    <span class="userName" id="userName">管理员</span>
+                    <button class="logoutButton" id="logoutButton">退出登录</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 内容区域 -->
+        <div class="contentArea">
+            <!-- 搜索区域 -->
+            <div class="searchSection">
+                <div class="searchBox">
+                    <input type="text" id="domainName" class="searchInput" placeholder="请输入域名" />
+                    <button class="searchButton" id="searchButton">检索</button>
+                </div>
+            </div>
+
+            <!-- 主要内容区（1:2布局） -->
+            <div class="mainSection">
+                <!-- 左侧列（占1份） -->
+                <div class="leftColumn">
+                    <!-- 爆破子域名 -->
+                    <div class="infoCard">
+                        <div class="cardHeader">
+                            <h3 class="cardTitle">爆破子域名</h3>
+                        </div>
+                        <div class="cardContent" id="subdomainContent">
+                            <p class="emptyText">暂无数据，请输入域名进行检索</p>
+                        </div>
+                    </div>
+
+                    <!-- 登录口的路径和验证因子 -->
+                    <div class="infoCard">
+                        <div class="cardHeader">
+                            <h3 class="cardTitle">登录口的路径和验证因子</h3>
+                        </div>
+                        <div class="cardContent" id="loginPathContent">
+                            <p class="emptyText">暂无数据，请输入域名进行检索</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧列（占2份） -->
+                <div class="rightColumn">
+                    <!-- 相关资产路径 -->
+                    <div class="infoCard fullHeight">
+                        <div class="cardHeader">
+                            <h3 class="cardTitle">相关资产路径</h3>
+                        </div>
+                        <div class="cardContent" id="assetsContent">
+                            <p class="emptyText">暂无数据，请输入域名进行检索</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/index.js"></script>
+</body>
+</html>
