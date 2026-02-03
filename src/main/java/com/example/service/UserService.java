@@ -4,6 +4,7 @@ import com.example.dto.LoginRequest;
 import com.example.entity.User;
 import com.example.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,15 +20,19 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
     
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
     /**
      * 用户登录
+     * 使用BCrypt密码验证
      */
     public User login(LoginRequest request) {
         Optional<User> userOpt = userRepository.findByUsername(request.getUsername());
         if (userOpt.isPresent()) {
             User user = userOpt.get();
-            // 简单的密码验证（实际项目应该使用加密）
-            if (user.getPassword().equals(request.getPassword()) && user.getStatus() == 1) {
+            // 使用BCrypt验证密码
+            if (passwordEncoder.matches(request.getPassword(), user.getPassword()) && user.getStatus() == 1) {
                 return user;
             }
         }
@@ -50,12 +55,15 @@ public class UserService {
     
     /**
      * 创建用户
+     * 密码会自动进行BCrypt加密存储
      */
     @Transactional
     public User createUser(User user) {
         if (userRepository.existsByUsername(user.getUsername())) {
             throw new RuntimeException("用户名已存在");
         }
+        // 对密码进行BCrypt加密
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }
     
@@ -80,9 +88,9 @@ public class UserService {
         existingUser.setPhone(user.getPhone());
         existingUser.setStatus(user.getStatus());
         
-        // 如果提供了密码，则更新密码
+        // 如果提供了密码，则更新密码（加密存储）
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
-            existingUser.setPassword(user.getPassword());
+            existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
         }
         
         return userRepository.save(existingUser);
