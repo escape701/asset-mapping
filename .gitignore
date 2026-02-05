@@ -53,3 +53,6 @@ logs/
 application-local.yml
 application-dev.yml
 
+# Crawler / Python 输出（不提交）
+crawler-output/
+

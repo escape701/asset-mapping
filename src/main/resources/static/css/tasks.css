@@ -1,0 +1,654 @@
+/* 创建任务卡片 */
+.createTaskCard {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    border: 1px solid rgba(36, 119, 233, 0.08);
+    margin-bottom: 24px;
+}
+
+.createTaskCard .cardHeader {
+    padding: 20px 24px;
+    background: linear-gradient(to right, #fafbfc 0%, #f1f5f9 100%);
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.createTaskCard .cardTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.createTaskCard .cardContent {
+    padding: 24px;
+}
+
+/* 任务输入区域布局 */
+.taskInputSection {
+    display: flex;
+    gap: 24px;
+    align-items: stretch;
+}
+
+.domainInputArea,
+.fileUploadArea {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.inputLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+}
+
+.inputLabel svg {
+    color: #2477e9;
+}
+
+/* 域名输入框 */
+.domainTextarea {
+    flex: 1;
+    min-height: 200px;
+    padding: 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 14px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.domainTextarea:focus {
+    border-color: #2477e9;
+    box-shadow: 0 0 0 4px rgba(36, 119, 233, 0.1);
+}
+
+.domainTextarea::placeholder {
+    color: #9ca3af;
+    font-family: 'Microsoft YaHei', sans-serif;
+}
+
+.domainCount {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.domainCount span {
+    padding: 4px 12px;
+    background: #f3f4f6;
+    border-radius: 12px;
+}
+
+/* 分隔符 */
+.orDivider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+}
+
+.orDivider span {
+    color: #9ca3af;
+    font-size: 14px;
+    font-weight: 500;
+    background: white;
+    padding: 10px;
+    border-radius: 50%;
+    border: 2px solid #e5e7eb;
+}
+
+/* 文件上传区域 */
+.uploadBox {
+    flex: 1;
+    min-height: 200px;
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #fafbfc;
+}
+
+.uploadBox:hover {
+    border-color: #2477e9;
+    background: #eff6ff;
+}
+
+.uploadBox.dragover {
+    border-color: #2477e9;
+    background: #dbeafe;
+    transform: scale(1.02);
+}
+
+.uploadIcon {
+    color: #9ca3af;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+}
+
+.uploadBox:hover .uploadIcon {
+    color: #2477e9;
+    transform: translateY(-4px);
+}
+
+.uploadText {
+    font-size: 14px;
+    color: #4b5563;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.uploadHint {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+/* 已上传文件显示 */
+.uploadedFile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: #f0fdf4;
+    border: 2px solid #86efac;
+    border-radius: 12px;
+    margin-top: 12px;
+}
+
+.uploadedFile svg {
+    color: #22c55e;
+}
+
+.uploadedFile #fileName {
+    font-weight: 600;
+    color: #166534;
+}
+
+.uploadedFile #fileCount {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.removeFileBtn {
+    margin-left: auto;
+    padding: 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.removeFileBtn:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+/* 提交按钮区域 */
+.submitSection {
+    margin-top: 24px;
+    display: flex;
+    justify-content: center;
+}
+
+.submitTaskBtn {
+    padding: 14px 48px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.submitTaskBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* 任务列表卡片 */
+.taskListCard {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    border: 1px solid rgba(36, 119, 233, 0.08);
+}
+
+.taskListCard .cardHeader {
+    padding: 20px 24px;
+    background: linear-gradient(to right, #fafbfc 0%, #f1f5f9 100%);
+    border-bottom: 2px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.taskListCard .cardTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.refreshBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+}
+
+.taskListContent {
+    padding: 24px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* 空任务列表 */
+.emptyTaskList {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.emptyTaskList svg {
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.emptyTaskList p {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.emptyTaskList span {
+    font-size: 13px;
+}
+
+/* 任务列表项 */
+.taskListWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.taskItem {
+    background: #fafbfc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.taskItem:hover {
+    background: #f0f9ff;
+    border-color: #93c5fd;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(36, 119, 233, 0.1);
+}
+
+.taskItemHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.taskItemTitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.taskItemTitle svg {
+    color: #2477e9;
+}
+
+.taskItemTime {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.taskItemBody {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.taskDomainCount {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.taskDomainCount svg {
+    color: #9ca3af;
+}
+
+.taskProgress {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.progressBar {
+    flex: 1;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #2477e9, #60a5fa);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.progressText {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2477e9;
+    min-width: 45px;
+}
+
+/* 任务状态徽章 */
+.taskStatus {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.statusPending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.statusRunning {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.statusCompleted {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.statusFailed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* 状态动画 */
+.statusRunning::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: #3b82f6;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+    }
+}
+
+/* 任务操作按钮 */
+.taskItemActions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.taskActionBtn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 删除按钮 */
+.deleteTaskBtn {
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+}
+
+.deleteTaskBtn:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+/* 任务头部右侧操作区 */
+.taskItemHeaderRight {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 清理按钮 */
+.cleanupBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.cleanupBtn:hover {
+    background: #fde68a;
+}
+
+/* 确认对话框 */
+.confirmModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.confirmModal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.confirmModalContent {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.confirmModal.show .confirmModalContent {
+    transform: scale(1);
+}
+
+.confirmModalTitle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 12px;
+}
+
+.confirmModalTitle svg {
+    color: #f59e0b;
+}
+
+.confirmModalMessage {
+    color: #6b7280;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.confirmModalOptions {
+    margin-bottom: 20px;
+}
+
+.confirmModalOptions label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #374151;
+    cursor: pointer;
+}
+
+.confirmModalOptions input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #2477e9;
+}
+
+.confirmModalActions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.confirmModalActions .btn {
+    padding: 10px 20px;
+    font-size: 14px;
+}
+
+.btnDanger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+}
+
+.btnDanger:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+/* 头部按钮组 */
+.headerBtnGroup {
+    display: flex;
+    gap: 10px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .taskInputSection {
+        flex-direction: column;
+    }
+
+    .orDivider {
+        padding: 20px 0;
+    }
+
+    .orDivider span {
+        position: relative;
+    }
+
+    .orDivider::before,
+    .orDivider::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: 100px;
+        height: 1px;
+        background: #e5e7eb;
+    }
+
+    .orDivider::before {
+        right: calc(50% + 30px);
+    }
+
+    .orDivider::after {
+        left: calc(50% + 30px);
+    }
+}
+
+@media (max-width: 768px) {
+    .createTaskCard .cardContent,
+    .taskListContent {
+        padding: 16px;
+    }
+
+    .domainTextarea {
+        min-height: 150px;
+    }
+
+    .uploadBox {
+        min-height: 150px;
+    }
+
+    .taskItemBody {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .taskProgress {
+        width: 100%;
+    }
+}

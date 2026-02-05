@@ -43,8 +43,8 @@ loginForm.addEventListener('submit', async function(e) {
         const result = await response.json();
         
         if (result.code === 200) {
-            // 登录成功，跳转到首页
-            window.location.href = '/index';
+            // 登录成功，跳转到任务管理页面
+            window.location.href = '/tasks';
         } else {
             showError(result.message || '登录失败');
         }

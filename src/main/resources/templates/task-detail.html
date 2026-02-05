@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务详情 - 智能化资产测绘平台</title>
+    <link rel="stylesheet" href="/css/common.css">
+    <link rel="stylesheet" href="/css/task-detail.css">
+</head>
+<body>
+<div class="container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebarHeader">
+            <h2>智能化资产测绘平台</h2>
+        </div>
+        <nav class="sidebarNav">
+            <a href="/tasks" class="navItem active">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>首页</span>
+            </a>
+            <a href="/users" class="navItem">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>用户管理</span>
+            </a>
+            <a href="/settings" class="navItem">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                <span>系统设置</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="mainContent">
+        <!-- 顶部导航栏 -->
+        <header class="topBar">
+            <div class="topBarLeft">
+                <a href="/tasks" class="backLink">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    返回首页
+                </a>
+                <h1 id="taskTitle">任务详情</h1>
+            </div>
+            <div class="topBarRight">
+                <div class="userInfo">
+                    <span class="userName" id="userName">加载中...</span>
+                    <button class="logoutButton" id="logoutButton">退出登录</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 内容区域 -->
+        <div class="contentArea">
+            <div class="detailLayout">
+                <!-- 左侧：域名列表 + 结果展示 -->
+                <div class="leftPanel">
+                    <!-- 任务概览 -->
+                    <div class="taskOverview">
+                        <div class="overviewItem">
+                            <span class="overviewLabel">任务ID</span>
+                            <span class="overviewValue" id="taskId">-</span>
+                        </div>
+                        <div class="overviewItem">
+                            <span class="overviewLabel">状态</span>
+                            <span class="taskStatus statusRunning" id="taskStatus">运行中</span>
+                        </div>
+                        <div class="overviewItem">
+                            <span class="overviewLabel">进度</span>
+                            <div class="overviewProgress">
+                                <div class="progressBar">
+                                    <div class="progressFill" id="progressFill" style="width: 0%"></div>
+                                </div>
+                                <span id="progressText">0%</span>
+                            </div>
+                        </div>
+                        <div class="overviewItem">
+                            <span class="overviewLabel">创建时间</span>
+                            <span class="overviewValue" id="taskCreatedAt">-</span>
+                        </div>
+                        <div class="overviewItem overviewActions">
+                            <button class="btn btnSecondary syncBtn" id="syncBtn" onclick="syncTaskProgress()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                                同步进度
+                            </button>
+                            <button class="btn btnDanger deleteTaskBtn" id="deleteTaskBtn" onclick="confirmDeleteTask()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                                删除任务
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 域名选择器 -->
+                    <div class="domainSelector">
+                        <div class="selectorHeader">
+                            <h3>域名列表</h3>
+                            <span class="domainTotal" id="domainTotal">共 0 个</span>
+                        </div>
+                        <div class="domainList" id="domainList">
+                            <!-- 域名项会通过JS动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 结果展示区 -->
+                    <div class="resultSection">
+                        <div class="resultTabs">
+                            <button class="resultTab active" data-tab="subdomains">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                </svg>
+                                爆破子域名
+                            </button>
+                            <button class="resultTab" data-tab="logins">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                登录入口
+                            </button>
+                            <button class="resultTab" data-tab="assets">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                资产路径
+                            </button>
+                            <button class="resultTab" data-tab="logs">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
+                                </svg>
+                                实时日志
+                            </button>
+                        </div>
+                        <div class="resultContent" id="resultContent">
+                            <div class="resultEmpty">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                <p>选择左侧域名查看结果</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 登录截图预览模态框 -->
+                    <div class="screenshotModal" id="screenshotModal">
+                        <div class="screenshotModalContent">
+                            <div class="screenshotModalHeader">
+                                <h3 id="screenshotModalTitle">登录页面截图</h3>
+                                <span class="closeScreenshotModal" id="closeScreenshotModal">&times;</span>
+                            </div>
+                            <div class="screenshotModalBody">
+                                <img id="screenshotModalImg" src="" alt="登录页面截图">
+                            </div>
+                            <div class="screenshotModalFooter">
+                                <span id="screenshotModalUrl"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：AI 对话框 -->
+                <div class="rightPanel">
+                    <div class="aiChatBox">
+                        <div class="chatHeader">
+                            <div class="chatHeaderTitle">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                AI 智能分析
+                            </div>
+                            <div class="aiModelSelector">
+                                <select id="aiModelSelect">
+                                    <option value="openai">OpenAI GPT-4</option>
+                                    <option value="gemini">Google Gemini</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="chatMessages" id="chatMessages">
+                            <!-- 欢迎消息 -->
+                            <div class="chatMessage assistant">
+                                <div class="messageAvatar">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                    </svg>
+                                </div>
+                                <div class="messageContent">
+                                    <p>您好！我是AI分析助手。我可以帮您分析这次资产测绘的结果，包括：</p>
+                                    <ul>
+                                        <li>安全风险评估</li>
+                                        <li>登录入口分析</li>
+                                        <li>敏感路径识别</li>
+                                        <li>测绘结果总结</li>
+                                    </ul>
+                                    <p>请选择域名后，您可以向我提问任何关于测绘结果的问题。</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chatInputArea">
+                            <div class="quickActions">
+                                <button class="quickActionBtn" data-prompt="分析这个域名的安全风险">安全风险</button>
+                                <button class="quickActionBtn" data-prompt="总结发现的所有子域名">子域名分析</button>
+                                <button class="quickActionBtn" data-prompt="总结发现的所有登录入口">登录入口</button>
+                                <button class="quickActionBtn" data-prompt="给出整体安全建议">安全建议</button>
+                            </div>
+                            <div class="chatInputWrapper">
+                                <textarea id="chatInput" placeholder="输入您的问题，按 Enter 发送..." rows="1"></textarea>
+                                <button class="sendBtn" id="sendBtn">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/task-detail.js"></script>
+</body>
+</html>
