@@ -307,10 +307,10 @@ public class CrawlerService {
             appendToTaskLog(taskLogFile, String.format("[%s] 开始爬取", domain));
             log.info("开始爬取域名: {}, 任务: {}", domain, taskId);
             
-            // 5. 启动 Python 进程
+            // 5. 启动 Python 进程（使用绝对路径确保跨工作目录访问）
             ProcessBuilder pb = new ProcessBuilder(
                 pythonPath, "-m", "login_crawler.combined_cli",
-                "-c", configFile.toString()
+                "-c", configFile.toAbsolutePath().toString()
             );
             pb.directory(new File(crawlerProjectPath));
             pb.redirectErrorStream(true);
@@ -387,12 +387,12 @@ public class CrawlerService {
         Path templatePath = Paths.get(crawlerProjectPath, configTemplate);
         String template = Files.readString(templatePath);
         
-        // 替换配置项
+        // 替换配置项 - 使用绝对路径以确保跨进程工作目录访问
         String config = template
-            .replace("domains_file: input.txt", "domains_file: " + inputFile.toString().replace("\\", "/"))
-            .replace("output_dir: out/combined", "output_dir: " + outputDir.toString().replace("\\", "/"))
+            .replace("domains_file: input.txt", "domains_file: " + inputFile.toAbsolutePath().toString().replace("\\", "/"))
+            .replace("output_dir: out/combined", "output_dir: " + outputDir.toAbsolutePath().toString().replace("\\", "/"))
             .replace("summary_output: out/combined/summary.json", 
-                     "summary_output: " + outputDir.resolve("summary.json").toString().replace("\\", "/"));
+                     "summary_output: " + outputDir.resolve("summary.json").toAbsolutePath().toString().replace("\\", "/"));
         
         // 写入配置文件
         Path configFile = outputDir.resolve("config.yaml");
