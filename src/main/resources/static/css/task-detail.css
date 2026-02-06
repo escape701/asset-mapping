@@ -716,10 +716,14 @@
 /* 右侧 AI 对话面板 */
 .rightPanel {
     height: 100%;
+    min-height: 0;  /* 防止 flex 子项溢出 */
+    display: flex;
+    flex-direction: column;
 }
 
 .aiChatBox {
     height: 100%;
+    min-height: 0;  /* 防止 flex 子项溢出 */
     background: white;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -768,6 +772,7 @@
 /* 聊天消息区域 */
 .chatMessages {
     flex: 1;
+    min-height: 0;  /* 关键：让消息区域可以正确滚动而不溢出 */
     padding: 16px;
     overflow-y: auto;
     display: flex;
@@ -1538,4 +1543,24 @@
 .loginCardTag.depth {
     background: #e0e7ff;
     color: #4338ca;
+}
+
+/* 认证方式标签 */
+.loginCardTag.authType {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+/* MFA标签 */
+.loginCardTag.mfa {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* 登录检测错误 */
+.loginCardError {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #dc2626;
+    line-height: 1.3;
 }

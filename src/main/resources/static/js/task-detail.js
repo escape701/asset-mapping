@@ -457,7 +457,37 @@ function loadMockData() {
 // 从 visited_pages 中提取登录页面
 function extractLoginPages(visitedPages) {
     if (!visitedPages) return [];
-    return visitedPages.filter(page => page.is_login_page && page.is_login_page.trim() !== '');
+    return visitedPages.filter(page => {
+        if (!page.is_login_page) return false;
+        const val = page.is_login_page.toString().trim().toUpperCase();
+        // 排除明确标记为非登录页的情况
+        if (val === '' || val === 'NO' || val === 'FALSE') return false;
+        // "YES" 或其他描述性文字都视为登录页
+        return true;
+    });
+}
+
+// 格式化登录页描述信息
+function formatLoginDesc(page) {
+    const parts = [];
+    // 如果有 login_detection 详情，优先使用
+    if (page.login_detection) {
+        const det = page.login_detection;
+        if (det.auth_types && det.auth_types.length > 0) {
+            parts.push('认证方式: ' + det.auth_types.join(', '));
+        }
+        if (det.mfa_confirmation) {
+            parts.push(det.mfa_confirmation === 'NO MFA' ? '无MFA' : 'MFA: ' + det.mfa_confirmation);
+        }
+    }
+    // 如果没有 login_detection 详情，回退到 is_login_page 的描述文字
+    if (parts.length === 0) {
+        const desc = page.is_login_page ? page.is_login_page.toString().trim() : '';
+        if (desc && desc.toUpperCase() !== 'YES' && desc.toUpperCase() !== 'NO') {
+            return desc;
+        }
+    }
+    return parts.join(' | ');
 }
 
 // 将本地截图路径转换为可访问的URL
@@ -830,8 +860,15 @@ function renderResults() {
                                     ${hasPopups ? `<span class="loginCardTag popup">+${page.popup_login_screenshot_path.length}弹窗</span>` : ''}
                                     <span class="loginCardTag">${page.status_code}</span>
                                     <span class="loginCardTag depth">深度${page.depth || 0}</span>
+                                    ${page.login_detection && page.login_detection.auth_types && page.login_detection.auth_types.length > 0
+                                        ? page.login_detection.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('')
+                                        : ''}
+                                    ${page.login_detection && page.login_detection.mfa_confirmation && page.login_detection.mfa_confirmation !== 'NO MFA'
+                                        ? `<span class="loginCardTag mfa">MFA</span>`
+                                        : ''}
                                 </div>
-                                <div class="loginCardDesc">${page.is_login_page}</div>
+                                <div class="loginCardDesc">${formatLoginDesc(page)}</div>
+                                ${page.login_detection_error ? `<div class="loginCardError">${page.login_detection_error}</div>` : ''}
                                 ${page.discovered_at ? `<div class="loginCardTime">发现于 ${formatTime(page.discovered_at)}</div>` : ''}
                             </div>
                         </div>
@@ -1236,19 +1273,20 @@ async function sendMessage() {
     // 显示加载状态
     const loadingId = appendMessage('assistant', null, true);
     
-    // 构建上下文
+    // 构建上下文（包含整个任务的所有域名）
     const context = buildContext();
     
     try {
         const aiModel = document.getElementById('aiModelSelect').value;
         
-        const response = await fetch('/api/ai/chat', {
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 taskId: taskId,
+                domain: selectedDomain ? selectedDomain.domain : '',
                 message: message,
                 context: context,
                 model: aiModel,
@@ -1266,54 +1304,83 @@ async function sendMessage() {
             conversationHistory.push({ role: 'user', content: message });
             conversationHistory.push({ role: 'assistant', content: result.data.reply });
         } else {
-            // API可能还没实现，使用模拟回复
-            const mockReply = generateMockReply(message, context);
-            appendMessage('assistant', mockReply);
+            // 显示后端返回的错误信息
+            const errorMsg = result.message || '请求失败，请检查AI服务配置';
+            console.error('AI对话错误:', errorMsg);
+            appendMessage('assistant', `**请求失败：** ${errorMsg}\n\n请检查系统设置中的AI配置是否正确。`);
         }
     } catch (error) {
         console.error('发送消息失败:', error);
         removeMessage(loadingId);
-        
-        // 使用模拟回复
-        const mockReply = generateMockReply(message, context);
-        appendMessage('assistant', mockReply);
+        appendMessage('assistant', `**网络错误：** 无法连接到AI服务，请检查网络连接和后端服务是否正常运行。\n\n错误详情：${error.message}`);
     }
 }
 
-// 构建上下文
+// 构建上下文（包含整个任务的所有域名数据）
 function buildContext() {
-    if (!selectedDomain) return '';
+    if (!taskData || !taskData.domains || taskData.domains.length === 0) return '';
     
-    const subdomains = selectedDomain.discovery?.subdomains || [];
-    const loginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
-    const stats = selectedDomain.crawl?.statistics || {};
-    
-    let context = `当前选择的域名: ${selectedDomain.domain}\n`;
-    context += `状态: ${selectedDomain.status}\n`;
-    context += `Landing URL: ${selectedDomain.landingUrl || '未知'}\n`;
-    context += `发现子域名数: ${subdomains.length}\n`;
-    context += `发现登录入口数: ${loginPages.length}\n`;
-    context += `总发现URL数: ${stats.total_discovered || 0}\n`;
-    context += `已访问页面数: ${stats.total_visited || 0}\n`;
-    context += `失败数: ${stats.total_failed || 0}\n\n`;
-    
-    if (subdomains.length > 0) {
-        context += '子域名:\n';
-        subdomains.forEach(sub => {
-            context += `- ${sub}\n`;
-        });
-        context += '\n';
+    let context = `=== 资产测绘任务知识库 ===\n`;
+    context += `任务ID: ${taskId}\n`;
+    context += `任务状态: ${taskData.status}\n`;
+    context += `域名总数: ${taskData.domains.length}\n`;
+    if (selectedDomain) {
+        context += `当前聚焦域名: ${selectedDomain.domain}\n`;
     }
+    context += '\n';
     
-    if (loginPages.length > 0) {
-        context += '登录入口:\n';
-        loginPages.forEach(page => {
-            context += `- ${page.url}\n`;
-            context += `  标题: ${page.title || '无'}\n`;
-            context += `  识别结果: ${page.is_login_page}\n`;
-        });
-        context += '\n';
-    }
+    // 遍历所有域名
+    taskData.domains.forEach(domain => {
+        context += `========================================\n`;
+        context += `【域名: ${domain.domain}】\n`;
+        context += `========================================\n`;
+        context += `状态: ${domain.status}\n`;
+        
+        const subdomains = domain.discovery?.subdomains || [];
+        const loginPages = extractLoginPages(domain.crawl?.visited_pages);
+        const stats = domain.crawl?.statistics || {};
+        
+        context += `子域名数: ${subdomains.length}\n`;
+        context += `登录入口数: ${loginPages.length}\n`;
+        context += `总发现URL: ${stats.total_discovered || 0}\n`;
+        context += `已访问页面: ${stats.total_visited || 0}\n`;
+        context += `失败数: ${stats.total_failed || 0}\n\n`;
+        
+        if (subdomains.length > 0) {
+            context += `子域名列表:\n`;
+            subdomains.slice(0, 50).forEach(sub => {
+                context += `  - ${sub}\n`;
+            });
+            if (subdomains.length > 50) {
+                context += `  ... 还有 ${subdomains.length - 50} 个\n`;
+            }
+            context += '\n';
+        }
+        
+        if (loginPages.length > 0) {
+            context += `登录入口:\n`;
+            loginPages.forEach(page => {
+                context += `  - ${page.url}\n`;
+                context += `    标题: ${page.title || '无'}\n`;
+                context += `    识别结果: ${page.is_login_page}\n`;
+            });
+            context += '\n';
+        }
+        
+        // 访问的页面概要
+        const visitedPages = domain.crawl?.visited_pages || [];
+        if (visitedPages.length > 0) {
+            context += `访问的页面(共 ${visitedPages.length} 个):\n`;
+            visitedPages.slice(0, 30).forEach(page => {
+                context += `  - ${page.url || ''}\n`;
+                if (page.title) context += `    标题: ${page.title}\n`;
+            });
+            if (visitedPages.length > 30) {
+                context += `  ... 还有 ${visitedPages.length - 30} 个页面\n`;
+            }
+            context += '\n';
+        }
+    });
     
     return context;
 }
@@ -1436,13 +1503,19 @@ ${discoveredUrls.length > 10 ? `\n... 还有 ${discoveredUrls.length - 10} 个` 
 - "有哪些敏感路径需要关注"`;
 }
 
+// 消息计数器，确保每条消息 ID 唯一
+let messageCounter = 0;
+
 // 添加消息到聊天框
 function appendMessage(role, content, isLoading = false) {
     const chatMessages = document.getElementById('chatMessages');
-    const messageId = 'msg-' + Date.now();
+    const messageId = 'msg-' + Date.now() + '-' + (++messageCounter);
     
     const messageDiv = document.createElement('div');
     messageDiv.className = `chatMessage ${role}`;
+    if (isLoading) {
+        messageDiv.className += ' loading';
+    }
     messageDiv.id = messageId;
     
     const avatar = role === 'assistant' ? `
@@ -1511,6 +1584,10 @@ function removeMessage(messageId) {
     const message = document.getElementById(messageId);
     if (message) {
         message.remove();
+    } else {
+        // 兜底：如果按 ID 找不到，移除所有 loading 状态的消息
+        const loadingMessages = document.querySelectorAll('.chatMessage.loading');
+        loadingMessages.forEach(msg => msg.remove());
     }
 }
 

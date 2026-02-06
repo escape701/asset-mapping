@@ -489,8 +489,7 @@ public class CrawlerService {
                 if (visitedPages != null) {
                     int loginCount = 0;
                     for (Map<String, Object> page : visitedPages) {
-                        Object isLoginPage = page.get("is_login_page");
-                        if (isLoginPage != null && !isLoginPage.toString().trim().isEmpty()) {
+                        if (isLoginPage(page.get("is_login_page"))) {
                             loginCount++;
                         }
                     }
@@ -616,6 +615,7 @@ public class CrawlerService {
         // 从任务输出目录读取
         Task task = taskRepository.findById(taskId).orElse(null);
         if (task != null && task.getOutputDir() != null) {
+            // 目录结构: {outputDir}/{domain}/{domain}/discovery.json
             Path filePath = Paths.get(task.getOutputDir(), safeDomain, safeDomain, "discovery.json");
             if (filePath.toFile().exists()) {
                 Map<String, Object> result = readJsonFile(filePath);
@@ -647,6 +647,7 @@ public class CrawlerService {
         // 从任务输出目录读取
         Task task = taskRepository.findById(taskId).orElse(null);
         if (task != null && task.getOutputDir() != null) {
+            // 目录结构: {outputDir}/{domain}/{domain}/crawl.json
             Path filePath = Paths.get(task.getOutputDir(), safeDomain, safeDomain, "crawl.json");
             if (filePath.toFile().exists()) {
                 Map<String, Object> result = readJsonFile(filePath);
@@ -701,8 +702,7 @@ public class CrawlerService {
         
         List<Map<String, Object>> loginPages = new ArrayList<>();
         for (Map<String, Object> page : visitedPages) {
-            Object isLoginPage = page.get("is_login_page");
-            if (isLoginPage != null && !isLoginPage.toString().trim().isEmpty()) {
+            if (isLoginPage(page.get("is_login_page"))) {
                 loginPages.add(page);
             }
         }
@@ -977,8 +977,7 @@ public class CrawlerService {
         if (visitedPages != null) {
             int loginCount = 0;
             for (Map<String, Object> page : visitedPages) {
-                Object isLoginPage = page.get("is_login_page");
-                if (isLoginPage != null && !isLoginPage.toString().trim().isEmpty()) {
+                if (isLoginPage(page.get("is_login_page"))) {
                     loginCount++;
                 }
             }
@@ -1139,6 +1138,20 @@ public class CrawlerService {
     }
     
     /**
+     * 判断页面是否为登录页面
+     * 兼容新旧两种 Python 输出格式:
+     * - 旧版: is_login_page 为空字符串(非登录) 或 描述文字(登录)
+     * - 新版: is_login_page 为 "NO"(非登录) 或 "YES"(登录)
+     */
+    public static boolean isLoginPage(Object isLoginPageValue) {
+        if (isLoginPageValue == null) return false;
+        String val = isLoginPageValue.toString().trim();
+        if (val.isEmpty()) return false;
+        if ("NO".equalsIgnoreCase(val) || "FALSE".equalsIgnoreCase(val)) return false;
+        return true;
+    }
+    
+    /**
      * 清理任务的输出目录
      * @param taskId 任务ID
      * @return 是否成功清理
@@ -1295,8 +1308,7 @@ public class CrawlerService {
                     if (visitedPages != null) {
                         int loginCount = 0;
                         for (Map<String, Object> page : visitedPages) {
-                            Object isLoginPage = page.get("is_login_page");
-                            if (isLoginPage != null && !isLoginPage.toString().trim().isEmpty()) {
+                            if (isLoginPage(page.get("is_login_page"))) {
                                 loginCount++;
                             }
                         }

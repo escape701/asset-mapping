@@ -14,7 +14,7 @@ const MODELS = {
     ]
 };
 
-// 配置列表（模拟数据，实际从后端获取）
+// 配置列表
 let configs = [];
 let activeConfig = null;
 let editingConfigId = null;
@@ -81,21 +81,21 @@ function initEventListeners() {
     document.getElementById('logoutButton').addEventListener('click', logout);
 }
 
-// 加载配置列表
-function loadConfigs() {
-    // TODO: 从后端 API 获取配置列表
-    // 暂时使用模拟数据
-    loadMockConfigs();
-}
-
-// 加载模拟数据
-function loadMockConfigs() {
-    // 从 localStorage 读取配置（模拟持久化）
-    const savedConfigs = localStorage.getItem('llm_configs');
-    if (savedConfigs) {
-        configs = JSON.parse(savedConfigs);
-        activeConfig = configs.find(c => c.isActive) || null;
-    } else {
+// 加载配置列表（从后端 API）
+async function loadConfigs() {
+    try {
+        const response = await fetch('/api/llm-configs');
+        const result = await response.json();
+        
+        if (result.code === 200 && result.data) {
+            configs = result.data;
+            activeConfig = configs.find(c => c.isActive) || null;
+        } else {
+            configs = [];
+            activeConfig = null;
+        }
+    } catch (error) {
+        console.error('加载配置失败:', error);
         configs = [];
         activeConfig = null;
     }
@@ -129,7 +129,7 @@ function renderActiveConfig() {
     }
 
     const providerLabel = activeConfig.provider === 'google' ? 'Google Gemini' : 'OpenAI';
-    const maskedKey = maskApiKey(activeConfig.apiKey);
+    const maskedKey = activeConfig.apiKey || '****';
 
     container.innerHTML = `
         <div class="activeConfigDisplay">
@@ -227,7 +227,7 @@ function openModal(config = null) {
         document.getElementById('configName').value = config.name;
         document.getElementById('configProvider').value = config.provider;
         updateModelOptions(config.provider, config.model);
-        document.getElementById('configApiKey').value = config.apiKey;
+        document.getElementById('configApiKey').value = '';
         document.getElementById('apiKeyHint').textContent = '留空则不修改 API Key';
     } else {
         configForm.reset();
@@ -271,8 +271,8 @@ function updateModelOptions(provider, selectedModel = null) {
     }
 }
 
-// 保存配置
-function saveConfig() {
+// 保存配置（调用后端 API）
+async function saveConfig() {
     const name = document.getElementById('configName').value.trim();
     const provider = document.getElementById('configProvider').value;
     const model = document.getElementById('configModel').value;
@@ -289,45 +289,42 @@ function saveConfig() {
         return;
     }
     
-    if (editingConfigId) {
-        // 编辑现有配置
-        const index = configs.findIndex(c => c.id === editingConfigId);
-        if (index !== -1) {
-            configs[index].name = name;
-            configs[index].provider = provider;
-            configs[index].model = model;
-            if (apiKey) {
-                configs[index].apiKey = apiKey;
-            }
-            
-            if (configs[index].isActive) {
-                activeConfig = configs[index];
-            }
-        }
-    } else {
-        // 添加新配置
-        const newConfig = {
-            id: Date.now(),
-            name,
-            provider,
-            model,
-            apiKey,
-            isActive: configs.length === 0,  // 第一个配置自动激活
-            createdAt: new Date().toISOString()
-        };
-        configs.push(newConfig);
-        
-        if (newConfig.isActive) {
-            activeConfig = newConfig;
-        }
+    const requestBody = { name, provider, model };
+    if (apiKey) {
+        requestBody.apiKey = apiKey;
     }
     
-    // 保存到 localStorage（模拟持久化）
-    saveConfigsToStorage();
-    
-    closeModal();
-    renderConfigs();
-    showMessage(editingConfigId ? '配置已更新' : '配置已添加', 'success');
+    try {
+        let response;
+        if (editingConfigId) {
+            // 编辑现有配置
+            response = await fetch(`/api/llm-configs/${editingConfigId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+        } else {
+            // 添加新配置
+            response = await fetch('/api/llm-configs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+        }
+        
+        const result = await response.json();
+        
+        if (result.code === 200) {
+            closeModal();
+            await loadConfigs(); // 重新加载列表
+            showMessage(editingConfigId ? '配置已更新' : '配置已添加', 'success');
+        } else {
+            showMessage(result.message || '保存失败', 'error');
+        }
+    } catch (error) {
+        console.error('保存配置失败:', error);
+        showMessage('保存配置失败: ' + error.message, 'error');
+    }
 }
 
 // 编辑配置
@@ -338,50 +335,53 @@ function editConfig(id) {
     }
 }
 
-// 删除配置
-function deleteConfig(id) {
+// 删除配置（调用后端 API）
+async function deleteConfig(id) {
     if (!confirm('确定要删除这个配置吗？')) return;
     
-    const index = configs.findIndex(c => c.id === id);
-    if (index !== -1) {
-        const wasActive = configs[index].isActive;
-        configs.splice(index, 1);
+    try {
+        const response = await fetch(`/api/llm-configs/${id}`, {
+            method: 'DELETE'
+        });
         
-        // 如果删除的是激活配置，清空 activeConfig
-        if (wasActive) {
-            activeConfig = null;
-            // 如果还有其他配置，激活第一个
-            if (configs.length > 0) {
-                configs[0].isActive = true;
-                activeConfig = configs[0];
-            }
+        const result = await response.json();
+        
+        if (result.code === 200) {
+            await loadConfigs(); // 重新加载列表
+            showMessage('配置已删除', 'success');
+        } else {
+            showMessage(result.message || '删除失败', 'error');
         }
-        
-        saveConfigsToStorage();
-        renderConfigs();
-        showMessage('配置已删除', 'success');
+    } catch (error) {
+        console.error('删除配置失败:', error);
+        showMessage('删除配置失败: ' + error.message, 'error');
     }
 }
 
-// 激活配置
-function activateConfig(id) {
-    // 取消所有配置的激活状态
-    configs.forEach(c => c.isActive = false);
-    
-    // 激活指定配置
-    const config = configs.find(c => c.id === id);
-    if (config) {
-        config.isActive = true;
-        activeConfig = config;
+// 激活配置（调用后端 API）
+async function activateConfig(id) {
+    try {
+        const response = await fetch(`/api/llm-configs/${id}/activate`, {
+            method: 'POST'
+        });
         
-        saveConfigsToStorage();
-        renderConfigs();
-        showMessage(`已激活配置: ${config.name}`, 'success');
+        const result = await response.json();
+        
+        if (result.code === 200) {
+            await loadConfigs(); // 重新加载列表
+            const config = configs.find(c => c.id === id);
+            showMessage(`已激活配置: ${config ? config.name : id}`, 'success');
+        } else {
+            showMessage(result.message || '激活失败', 'error');
+        }
+    } catch (error) {
+        console.error('激活配置失败:', error);
+        showMessage('激活配置失败: ' + error.message, 'error');
     }
 }
 
-// 测试连接
-function testConnection() {
+// 测试连接（调用后端 API）
+async function testConnection() {
     const provider = document.getElementById('configProvider').value;
     const model = document.getElementById('configModel').value;
     const apiKey = document.getElementById('configApiKey').value.trim();
@@ -393,30 +393,48 @@ function testConnection() {
     
     showTestResult('loading', '测试中...', '正在验证 API 连接');
     
-    // 模拟测试请求
-    // TODO: 实际调用后端 API 测试
-    setTimeout(() => {
-        // 模拟成功或失败
-        const success = apiKey.length > 10;
-        if (success) {
-            showTestResult('success', '连接成功', `${provider === 'google' ? 'Gemini' : 'OpenAI'} API 响应正常`);
-        } else {
-            showTestResult('error', '连接失败', 'API Key 无效或网络错误');
-        }
-    }, 1500);
+    if (editingConfigId) {
+        // 如果是编辑模式，调用后端测试
+        await testConnectionForConfig(editingConfigId);
+    } else {
+        // 新增模式，先保存再测试，或简单验证 key 格式
+        // 简单验证: key 长度
+        setTimeout(() => {
+            if (apiKey.length > 10) {
+                showTestResult('success', '格式验证通过', 'API Key 格式正确，保存后可进行完整测试');
+            } else {
+                showTestResult('error', '格式验证失败', 'API Key 格式不正确');
+            }
+        }, 500);
+    }
 }
 
-// 测试指定配置的连接
-function testConnectionForConfig(id) {
+// 测试指定配置的连接（调用后端 API）
+async function testConnectionForConfig(id) {
     const config = configs.find(c => c.id === id);
-    if (!config) return;
+    showTestResult('loading', '测试中...', `正在验证 ${config ? config.name : '配置'}`);
     
-    showTestResult('loading', '测试中...', `正在验证 ${config.name}`);
-    
-    // TODO: 实际调用后端 API 测试
-    setTimeout(() => {
-        showTestResult('success', '连接成功', `${config.name} 响应正常，延迟 ${Math.floor(Math.random() * 200 + 100)}ms`);
-    }, 1500);
+    try {
+        const response = await fetch(`/api/llm-configs/${id}/test`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 200 && result.data) {
+            const data = result.data;
+            if (data.status === 'connected') {
+                showTestResult('success', '连接成功', `${data.message}，延迟 ${data.latency}ms`);
+            } else {
+                showTestResult('error', '连接失败', data.message || '未知错误');
+            }
+        } else {
+            showTestResult('error', '测试失败', result.message || '请求失败');
+        }
+    } catch (error) {
+        console.error('测试连接失败:', error);
+        showTestResult('error', '测试失败', '网络错误: ' + error.message);
+    }
 }
 
 // 显示测试结果
@@ -434,41 +452,6 @@ function showTestResult(type, title, message) {
             toast.classList.remove('show');
         }, 4000);
     }
-}
-
-// 保存配置到 localStorage
-function saveConfigsToStorage() {
-    localStorage.setItem('llm_configs', JSON.stringify(configs));
-    
-    // 同时生成 YAML 格式（用于展示，实际由后端生成）
-    generateYamlPreview();
-}
-
-// 生成 YAML 预览（仅用于调试）
-function generateYamlPreview() {
-    if (!activeConfig) return;
-    
-    console.log('=== Generated YAML Preview ===');
-    console.log(`# 自动生成的 LLM 配置`);
-    console.log(`# Generated at: ${new Date().toISOString()}\n`);
-    
-    const googleConfig = configs.find(c => c.provider === 'google');
-    const openaiConfig = configs.find(c => c.provider === 'openai');
-    
-    if (googleConfig) {
-        console.log(`google:`);
-        console.log(`  api_key: "${googleConfig.apiKey}"`);
-        console.log(`  model: "${googleConfig.model}"\n`);
-    }
-    
-    if (openaiConfig) {
-        console.log(`openai:`);
-        console.log(`  api_key: "${openaiConfig.apiKey}"`);
-        console.log(`  model: "${openaiConfig.model}"\n`);
-    }
-    
-    console.log(`active_provider: ${activeConfig.provider}`);
-    console.log('==============================');
 }
 
 // 遮蔽 API Key

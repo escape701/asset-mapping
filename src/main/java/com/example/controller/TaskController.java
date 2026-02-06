@@ -6,6 +6,7 @@ import com.example.dto.TaskResponse;
 import com.example.entity.Task;
 import com.example.service.TaskService;
 import com.example.service.CrawlerService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 /**
  * 任务控制器
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
@@ -112,8 +114,7 @@ public class TaskController {
             int loginCount = 0;
             if (visitedPages != null) {
                 for (Map<String, Object> page : visitedPages) {
-                    Object isLoginPage = page.get("is_login_page");
-                    if (isLoginPage != null && !isLoginPage.toString().trim().isEmpty()) {
+                    if (CrawlerService.isLoginPage(page.get("is_login_page"))) {
                         loginCount++;
                     }
                 }

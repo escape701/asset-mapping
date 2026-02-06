@@ -30,9 +30,7 @@ public class ChatController {
             if (request.getTaskId() == null || request.getTaskId().isEmpty()) {
                 return ResponseEntity.badRequest().body(ApiResponse.error("任务ID不能为空"));
             }
-            if (request.getDomain() == null || request.getDomain().isEmpty()) {
-                return ResponseEntity.badRequest().body(ApiResponse.error("域名不能为空"));
-            }
+            // domain 可以为空，为空时以整个任务作为知识库
             if (request.getMessage() == null || request.getMessage().isEmpty()) {
                 return ResponseEntity.badRequest().body(ApiResponse.error("消息不能为空"));
             }
