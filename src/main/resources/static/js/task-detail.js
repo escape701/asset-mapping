@@ -56,22 +56,30 @@ function initTabs() {
 function initScreenshotModal() {
     const modal = document.getElementById('screenshotModal');
     const closeBtn = document.getElementById('closeScreenshotModal');
-    
-    closeBtn.addEventListener('click', () => {
-        modal.classList.remove('show');
-    });
-    
+
+    closeBtn.addEventListener('click', () => modal.classList.remove('show'));
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.classList.remove('show');
-        }
+        if (e.target === modal) modal.classList.remove('show');
     });
-    
-    // ESC 键关闭
+
+    document.getElementById('screenshotPrev').addEventListener('click', () => {
+        if (screenshotGallery.images.length <= 1) return;
+        screenshotGallery.currentIndex =
+            (screenshotGallery.currentIndex - 1 + screenshotGallery.images.length) % screenshotGallery.images.length;
+        renderScreenshotGallery();
+    });
+    document.getElementById('screenshotNext').addEventListener('click', () => {
+        if (screenshotGallery.images.length <= 1) return;
+        screenshotGallery.currentIndex =
+            (screenshotGallery.currentIndex + 1) % screenshotGallery.images.length;
+        renderScreenshotGallery();
+    });
+
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('show')) {
-            modal.classList.remove('show');
-        }
+        if (!modal.classList.contains('show')) return;
+        if (e.key === 'Escape') modal.classList.remove('show');
+        if (e.key === 'ArrowLeft') document.getElementById('screenshotPrev').click();
+        if (e.key === 'ArrowRight') document.getElementById('screenshotNext').click();
     });
 }
 
@@ -477,17 +485,18 @@ function loadMockData() {
     renderDomainList();
 }
 
+// 判断单个页面是否为登录页（兼容新旧格式）
+function isLoginPage(page) {
+    if (!page || !page.is_login_page) return false;
+    const val = page.is_login_page.toString().trim().toUpperCase();
+    if (val === '' || val === 'NO' || val === 'FALSE') return false;
+    return true;
+}
+
 // 从 visited_pages 中提取登录页面
 function extractLoginPages(visitedPages) {
     if (!visitedPages) return [];
-    return visitedPages.filter(page => {
-        if (!page.is_login_page) return false;
-        const val = page.is_login_page.toString().trim().toUpperCase();
-        // 排除明确标记为非登录页的情况
-        if (val === '' || val === 'NO' || val === 'FALSE') return false;
-        // "YES" 或其他描述性文字都视为登录页
-        return true;
-    });
+    return visitedPages.filter(isLoginPage);
 }
 
 // 获取 login_detection 中的 LLM 验证信息（兼容新旧格式）
@@ -986,10 +995,10 @@ function renderResults() {
                         </h4>
                         <ul class="resultList">
                             ${visitedPages.map(page => `
-                                <li class="resultItem ${page.is_login_page ? 'login' : ''}">
+                                <li class="resultItem ${isLoginPage(page) ? 'login' : ''}">
                                     <div class="resultItemIcon">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            ${page.is_login_page ? `
+                                            ${isLoginPage(page) ? `
                                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                             ` : `
@@ -1302,28 +1311,48 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// 打开登录页截图预览
+// 截图画廊状态
+let screenshotGallery = { images: [], currentIndex: 0 };
+
 function openLoginScreenshot(index) {
     const loginPages = window.currentLoginPages || [];
     if (index >= loginPages.length) return;
-    
+
     const page = loginPages[index];
-    const modal = document.getElementById('screenshotModal');
-    const img = document.getElementById('screenshotModalImg');
-    const title = document.getElementById('screenshotModalTitle');
-    const url = document.getElementById('screenshotModalUrl');
-    
-    const screenshotUrl = getScreenshotUrl(page.screenshot_path);
-    img.src = screenshotUrl || '';
-    title.textContent = page.title || '登录页面截图';
-    url.textContent = page.url;
-    
-    // 如果有弹窗截图，显示提示
-    if (page.popup_login_screenshot_path && page.popup_login_screenshot_path.length > 0) {
-        url.textContent += ` (+${page.popup_login_screenshot_path.length} 个弹窗截图)`;
+    const images = [];
+
+    if (page.screenshot_path) {
+        images.push({ url: getScreenshotUrl(page.screenshot_path), label: '主截图' });
     }
-    
-    modal.classList.add('show');
+    if (page.popup_login_screenshot_path) {
+        page.popup_login_screenshot_path.forEach((p, i) => {
+            images.push({ url: getScreenshotUrl(p), label: `弹窗截图 ${i + 1}` });
+        });
+    }
+    if (images.length === 0) return;
+
+    screenshotGallery = { images, currentIndex: 0 };
+
+    document.getElementById('screenshotModalTitle').textContent = page.title || '登录页面截图';
+    document.getElementById('screenshotModalUrl').textContent = page.url;
+
+    const nav = document.getElementById('screenshotModalNav');
+    nav.style.display = images.length > 1 ? 'flex' : 'none';
+
+    renderScreenshotGallery();
+    document.getElementById('screenshotModal').classList.add('show');
+}
+
+function renderScreenshotGallery() {
+    const { images, currentIndex } = screenshotGallery;
+    const img = document.getElementById('screenshotModalImg');
+    const label = document.getElementById('screenshotNavLabel');
+
+    img.src = images[currentIndex].url || '';
+    img.alt = images[currentIndex].label;
+    if (label) {
+        label.textContent = `${images[currentIndex].label} (${currentIndex + 1}/${images.length})`;
+    }
 }
 
 // 发送消息
@@ -1431,6 +1460,15 @@ function buildContext() {
                 context += `  - ${page.url}\n`;
                 context += `    标题: ${page.title || '无'}\n`;
                 context += `    识别结果: ${page.is_login_page}\n`;
+                const det = page.login_detection || {};
+                if (det.scope) context += `    范围: ${det.scope}\n`;
+                if (det.signals && det.signals.length > 0) context += `    信号: ${det.signals.join(', ')}\n`;
+                const llm = getLlmVerification(page);
+                if (llm) {
+                    if (llm.auth_types && llm.auth_types.length > 0) context += `    认证方式: ${llm.auth_types.join(', ')}\n`;
+                    if (llm.mfa_confirmation !== undefined) context += `    MFA: ${llm.mfa_confirmation}\n`;
+                }
+                if (det.referrer) context += `    来源: ${det.referrer}\n`;
             });
             context += '\n';
         }
@@ -1501,11 +1539,19 @@ ${subdomains.map((s, i) => `${i + 1}. **${s}**`).join('\n')}
         }
         return `在 ${selectedDomain?.domain} 中共发现 ${loginPages.length} 个登录入口：
 
-${loginPages.map((page, i) => `${i + 1}. **${page.url}**
+${loginPages.map((page, i) => {
+    const det = page.login_detection || {};
+    const llm = getLlmVerification(page);
+    let text = `${i + 1}. **${page.url}**
    - 标题: ${page.title || '无'}
    - LLM识别结果: ${page.is_login_page}
    - 截图: ${page.screenshot_path ? '已截取' : '无'}
-   - 弹窗截图: ${page.popup_login_screenshot_path?.length || 0} 个`).join('\n\n')}
+   - 弹窗截图: ${page.popup_login_screenshot_path?.length || 0} 个`;
+    if (llm?.auth_types?.length) text += `\n   - 认证方式: ${llm.auth_types.join(', ')}`;
+    if (det.scope) text += `\n   - 范围: ${det.scope}`;
+    if (det.signals?.length) text += `\n   - 信号: ${det.signals.join(', ')}`;
+    return text;
+}).join('\n\n')}
 
 建议对每个登录入口进行安全测试，包括：
 - 密码强度策略检查
