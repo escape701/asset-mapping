@@ -45,7 +45,6 @@ crawler:
 
 # 截图服务配置
 screenshots:
-  serve-path: /api/screenshots
   base-dir: ../login_crawler/screenshots
 
 logging:

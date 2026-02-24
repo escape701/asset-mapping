@@ -4,6 +4,7 @@ import com.example.dto.ApiResponse;
 import com.example.dto.TaskRequest;
 import com.example.dto.TaskResponse;
 import com.example.entity.Task;
+import com.example.entity.User;
 import com.example.service.TaskService;
 import com.example.service.CrawlerService;
 import lombok.extern.slf4j.Slf4j;
@@ -163,8 +164,8 @@ public class TaskController {
             @RequestBody TaskRequest request,
             HttpSession session) {
         try {
-            // 获取当前用户ID（从session获取）
-            Long userId = (Long) session.getAttribute("userId");
+            User currentUser = (User) session.getAttribute("currentUser");
+            Long userId = currentUser != null ? currentUser.getUserId() : null;
             
             Task task = taskService.create(request, userId);
             return ResponseEntity.ok(ApiResponse.success(TaskResponse.fromEntity(task)));

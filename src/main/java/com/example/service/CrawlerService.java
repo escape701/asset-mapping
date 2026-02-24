@@ -8,7 +8,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -59,9 +58,6 @@ public class CrawlerService {
     // 存储域名级别的进程（domain key = taskId + "_" + domain）
     private final Map<String, Process> domainProcesses = new ConcurrentHashMap<>();
     
-    // 存储日志写入器（用于实时日志）
-    private final Map<String, BufferedWriter> logWriters = new ConcurrentHashMap<>();
-    
     // 存储日志文件路径
     private final Map<String, Path> logFilePaths = new ConcurrentHashMap<>();
     
@@ -104,16 +100,6 @@ public class CrawlerService {
         if (watcherThread != null) {
             watcherThread.interrupt();
         }
-        
-        // 关闭所有日志写入器
-        for (BufferedWriter writer : logWriters.values()) {
-            try {
-                writer.close();
-            } catch (IOException e) {
-                log.error("关闭日志写入器失败", e);
-            }
-        }
-        logWriters.clear();
         
         // 终止所有运行中的域名进程
         for (Map.Entry<String, Process> entry : domainProcesses.entrySet()) {
@@ -803,16 +789,6 @@ public class CrawlerService {
     }
     
     /**
-     * 检查任务是否有正在运行的进程
-     */
-    public boolean isProcessRunning(String taskId) {
-        // 检查是否有域名进程在运行
-        return domainProcesses.entrySet().stream()
-            .filter(e -> e.getKey().startsWith(taskId + "_"))
-            .anyMatch(e -> e.getValue().isAlive());
-    }
-    
-    /**
      * 启动文件监控
      */
     private void startFileWatcher() {
@@ -1199,9 +1175,6 @@ public class CrawlerService {
             });
     }
     
-    /**
-     * 获取任务输出目录大小（字节）
-     */
     /**
      * 手动同步任务进度（从文件读取并更新数据库）
      */

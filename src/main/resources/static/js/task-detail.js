@@ -212,7 +212,6 @@ async function syncTaskProgress(silent = false) {
             // 如果任务状态从 pending 变为 running，确保日志轮询已启动
             if (oldStatus === 'pending' && taskData.status === 'running') {
                 if (currentTab === 'logs' && !logPollingInterval) {
-                    console.log('任务状态变为 running，启动日志轮询');
                     startLogPolling();
                 }
             }
@@ -223,15 +222,9 @@ async function syncTaskProgress(silent = false) {
                 handleTaskCompletion();
             }
             
-            // 即使任务状态没变，如果域名完成数有变化，也更新结果（处理部分域名完成的情况）
-            if (domainsChanged) {
-                console.log(`域名完成数变化: ${oldCompletedDomains} -> ${newCompletedDomains}`);
-            }
-            
             if (!silent && typeof showMessage === 'function') {
                 showMessage('进度同步成功', 'success');
             }
-            console.log('任务进度已同步');
         } else {
             if (!silent && typeof showMessage === 'function') {
                 showMessage(result.message || '同步失败', 'error');
@@ -1135,7 +1128,7 @@ async function loadLogs(fullReload = false) {
 function startLogPolling() {
     stopLogPolling(); // 先停止之前的轮询
     
-    console.log('启动日志轮询，当前状态:', taskData?.status);
+
     
     logPollingInterval = setInterval(() => {
         if (currentTab === 'logs') {
@@ -1144,8 +1137,6 @@ function startLogPolling() {
             if (isRunning) {
                 loadLogs(false); // 增量加载
             } else {
-                // 任务已完成，停止轮询
-                console.log('任务已完成，停止日志轮询');
                 stopLogPolling();
             }
         }
@@ -1463,12 +1454,6 @@ function startPolling() {
         
         // 如果有域名还在运行或进度不完整，继续同步
         if (hasPendingOrRunningDomains || isProgressIncomplete) {
-            console.log('检测到域名状态不一致，继续同步...', {
-                hasPendingOrRunningDomains,
-                isProgressIncomplete,
-                completedDomains,
-                totalDomains: taskData.totalDomains
-            });
             await syncTaskProgress(true);
             return;
         }
@@ -1477,7 +1462,6 @@ function startPolling() {
         if (taskData.status === 'completed' || taskData.status === 'failed' || taskData.status === 'stopped') {
             if (consecutiveCompletedChecks < MAX_COMPLETED_CHECKS) {
                 consecutiveCompletedChecks++;
-                console.log(`任务已完成，执行额外同步 ${consecutiveCompletedChecks}/${MAX_COMPLETED_CHECKS}`);
                 await syncTaskProgress(true);
             }
         }

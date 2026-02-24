@@ -250,51 +250,11 @@ async function loadTasks() {
                 renderTasks(currentTasks);
             }
         } else {
-            // API可能还没实现，显示模拟数据
-            showMockTasks();
+            console.error('加载任务列表失败: 接口返回异常');
         }
     } catch (error) {
         console.error('加载任务列表失败:', error);
-        // 显示模拟数据用于演示
-        showMockTasks();
     }
-}
-
-// 显示模拟任务数据（用于前端开发演示）
-function showMockTasks() {
-    const mockTasks = [
-        {
-            taskId: 'baidu.com',
-            totalDomains: 1,
-            completedDomains: 1,
-            status: 'completed',
-            createdAt: new Date(Date.now() - 1800000).toISOString()
-        },
-        {
-            taskId: 'TASK-001',
-            totalDomains: 5,
-            completedDomains: 5,
-            status: 'completed',
-            createdAt: new Date(Date.now() - 3600000).toISOString()
-        },
-        {
-            taskId: 'TASK-002',
-            totalDomains: 10,
-            completedDomains: 6,
-            status: 'running',
-            createdAt: new Date(Date.now() - 1800000).toISOString()
-        },
-        {
-            taskId: 'TASK-003',
-            totalDomains: 3,
-            completedDomains: 0,
-            status: 'pending',
-            createdAt: new Date().toISOString()
-        }
-    ];
-    
-    document.getElementById('emptyTaskList').style.display = 'none';
-    renderTasks(mockTasks);
 }
 
 // 渲染任务列表
