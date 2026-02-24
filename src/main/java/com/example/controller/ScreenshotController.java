@@ -1,7 +1,5 @@
 package com.example.controller;
 
-import com.example.entity.Task;
-import com.example.repository.TaskRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -13,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
@@ -29,8 +26,6 @@ import java.nio.file.Paths;
 @RequestMapping("/api/screenshots")
 public class ScreenshotController {
     
-    private final TaskRepository taskRepository;
-    
     @Value("${screenshots.base-dir:../login_crawler/screenshots}")
     private String screenshotBaseDir;
     
@@ -39,41 +34,6 @@ public class ScreenshotController {
     
     @Value("${crawler.task-output-base:./crawler-output}")
     private String taskOutputBasePath;
-    
-    public ScreenshotController(TaskRepository taskRepository) {
-        this.taskRepository = taskRepository;
-    }
-    
-    /**
-     * 根据文件名获取截图
-     * URL: /api/screenshots/{filename}
-     * 例如: /api/screenshots/www.baidu.com__20260203_181405.png
-     */
-    @GetMapping("/{filename:.+}")
-    public ResponseEntity<Resource> getScreenshotByName(@PathVariable String filename) {
-        try {
-            // 安全检查：防止路径遍历攻击
-            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-                log.warn("检测到路径遍历尝试: {}", filename);
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            
-            // 构建文件路径
-            Path filePath = Paths.get(screenshotBaseDir, filename);
-            File file = filePath.toFile();
-            
-            if (!file.exists() || !file.isFile()) {
-                log.debug("截图文件不存在: {}", filePath);
-                return ResponseEntity.notFound().build();
-            }
-            
-            return serveImageFile(file);
-                
-        } catch (Exception e) {
-            log.error("获取截图失败: filename={}", filename, e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
     
     /**
      * 根据完整路径获取截图（用于 crawl.json 中的 screenshot_path）

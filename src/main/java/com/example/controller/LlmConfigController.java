@@ -39,26 +39,6 @@ public class LlmConfigController {
     }
     
     /**
-     * 获取激活的配置
-     */
-    @GetMapping("/active")
-    public ResponseEntity<ApiResponse<LlmConfigResponse>> getActive() {
-        return configService.findActive()
-            .map(config -> ResponseEntity.ok(ApiResponse.success(LlmConfigResponse.fromEntity(config))))
-            .orElse(ResponseEntity.ok(ApiResponse.success(null)));
-    }
-    
-    /**
-     * 根据ID获取配置
-     */
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<LlmConfigResponse>> getById(@PathVariable Long id) {
-        return configService.findById(id)
-            .map(config -> ResponseEntity.ok(ApiResponse.success(LlmConfigResponse.fromEntity(config))))
-            .orElse(ResponseEntity.notFound().build());
-    }
-    
-    /**
      * 创建配置
      */
     @PostMapping

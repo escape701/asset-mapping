@@ -23,8 +23,4 @@ public interface TaskDomainRepository extends JpaRepository<TaskDomain, Long> {
      */
     Optional<TaskDomain> findByTaskIdAndDomain(String taskId, String domain);
     
-    /**
-     * 根据任务ID统计已完成的域名数
-     */
-    long countByTaskIdAndStatus(String taskId, String status);
 }

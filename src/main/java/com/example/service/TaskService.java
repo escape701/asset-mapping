@@ -56,13 +56,6 @@ public class TaskService {
     }
     
     /**
-     * 根据创建者获取任务
-     */
-    public List<Task> findByCreatedBy(Long userId) {
-        return taskRepository.findByCreatedByOrderByCreatedAtDesc(userId);
-    }
-    
-    /**
      * 创建任务
      */
     @Transactional
@@ -230,26 +223,6 @@ public class TaskService {
         taskRepository.delete(task);
         
         log.info("任务已删除: {}", taskId);
-    }
-    
-    /**
-     * 批量删除任务
-     * @param taskIds 任务ID列表
-     * @param cleanupFiles 是否清理生成的文件
-     * @return 成功删除的数量
-     */
-    @Transactional
-    public int deleteMany(List<String> taskIds, boolean cleanupFiles) {
-        int deleted = 0;
-        for (String taskId : taskIds) {
-            try {
-                delete(taskId, cleanupFiles);
-                deleted++;
-            } catch (Exception e) {
-                log.warn("删除任务失败: {}", taskId, e);
-            }
-        }
-        return deleted;
     }
     
     /**

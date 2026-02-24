@@ -42,9 +42,6 @@ public class Task {
     private Integer pid;
     
     @Column(length = 500)
-    private String configPath;
-    
-    @Column(length = 500)
     private String outputDir;
     
     // 时间戳

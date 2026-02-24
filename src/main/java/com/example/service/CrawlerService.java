@@ -1202,35 +1202,6 @@ public class CrawlerService {
     /**
      * 获取任务输出目录大小（字节）
      */
-    public long getTaskOutputSize(String taskId) {
-        try {
-            Task task = taskRepository.findById(taskId).orElse(null);
-            Path outputDir = null;
-            
-            if (task != null && task.getOutputDir() != null) {
-                outputDir = Paths.get(task.getOutputDir());
-            } else {
-                outputDir = Paths.get(taskOutputBasePath, taskId);
-            }
-            
-            if (outputDir != null && Files.exists(outputDir)) {
-                return Files.walk(outputDir)
-                    .filter(Files::isRegularFile)
-                    .mapToLong(path -> {
-                        try {
-                            return Files.size(path);
-                        } catch (IOException e) {
-                            return 0;
-                        }
-                    })
-                    .sum();
-            }
-        } catch (Exception e) {
-            log.warn("获取任务输出目录大小失败: {}", taskId, e);
-        }
-        return 0;
-    }
-    
     /**
      * 手动同步任务进度（从文件读取并更新数据库）
      */

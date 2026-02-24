@@ -1345,26 +1345,6 @@
     color: #64748b;
 }
 
-/* 日志内容语法高亮 */
-.logsText .log-time {
-    color: #64748b;
-}
-
-.logsText .log-info {
-    color: #22d3ee;
-}
-
-.logsText .log-warn {
-    color: #fbbf24;
-}
-
-.logsText .log-error {
-    color: #f87171;
-}
-
-.logsText .log-success {
-    color: #4ade80;
-}
 
 /* 旋转动画 */
 .spinning {

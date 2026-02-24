@@ -16,16 +16,6 @@ import java.util.Optional;
 public interface TaskRepository extends JpaRepository<Task, String> {
     
     /**
-     * 根据创建者查询任务，按创建时间倒序
-     */
-    List<Task> findByCreatedByOrderByCreatedAtDesc(Long createdBy);
-    
-    /**
-     * 查询所有任务，按创建时间倒序
-     */
-    List<Task> findAllByOrderByCreatedAtDesc();
-    
-    /**
      * 查询所有任务并加载关联的域名数据，按创建时间倒序
      */
     @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.taskDomains ORDER BY t.createdAt DESC")

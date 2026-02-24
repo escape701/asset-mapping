@@ -217,33 +217,6 @@ public class TaskController {
     }
     
     /**
-     * 批量删除任务
-     */
-    @DeleteMapping("/batch")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteMany(
-            @RequestBody Map<String, Object> request) {
-        try {
-            @SuppressWarnings("unchecked")
-            List<String> taskIds = (List<String>) request.get("taskIds");
-            boolean cleanupFiles = request.get("cleanupFiles") == null || (Boolean) request.get("cleanupFiles");
-            
-            if (taskIds == null || taskIds.isEmpty()) {
-                return ResponseEntity.badRequest().body(ApiResponse.error("任务ID列表不能为空"));
-            }
-            
-            int deleted = taskService.deleteMany(taskIds, cleanupFiles);
-            
-            Map<String, Object> result = new java.util.HashMap<>();
-            result.put("deleted", deleted);
-            result.put("total", taskIds.size());
-            
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        }
-    }
-    
-    /**
      * 清理已完成的任务
      */
     @DeleteMapping("/cleanup")
@@ -256,52 +229,6 @@ public class TaskController {
             result.put("deleted", deleted);
             
             return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        }
-    }
-    
-    /**
-     * 获取域名的发现结果（子域名）
-     */
-    @GetMapping("/{taskId}/domains/{domain}/discovery")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getDiscoveryResult(
-            @PathVariable String taskId,
-            @PathVariable String domain) {
-        try {
-            Map<String, Object> result = crawlerService.readDiscoveryResult(taskId, domain);
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        }
-    }
-    
-    
-    /**
-     * 获取域名的爬取结果
-     */
-    @GetMapping("/{taskId}/domains/{domain}/crawl")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCrawlResult(
-            @PathVariable String taskId,
-            @PathVariable String domain) {
-        try {
-            Map<String, Object> result = crawlerService.readCrawlResult(taskId, domain);
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        }
-    }
-    
-    /**
-     * 获取域名的登录入口（从爬取结果中过滤）
-     */
-    @GetMapping("/{taskId}/domains/{domain}/logins")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getLoginPages(
-            @PathVariable String taskId,
-            @PathVariable String domain) {
-        try {
-            List<Map<String, Object>> logins = crawlerService.extractLoginPages(taskId, domain);
-            return ResponseEntity.ok(ApiResponse.success(logins));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
@@ -338,30 +265,6 @@ public class TaskController {
         try {
             Map<String, Object> logs = crawlerService.getLatestLogs(id, lines);
             return ResponseEntity.ok(ApiResponse.success(logs));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        }
-    }
-    
-    /**
-     * 检查任务进程是否在运行
-     */
-    @GetMapping("/{id}/status")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getTaskStatus(@PathVariable String id) {
-        try {
-            return taskService.findById(id)
-                .map(task -> {
-                    Map<String, Object> status = new java.util.HashMap<>();
-                    status.put("taskId", id);
-                    status.put("status", task.getStatus());
-                    status.put("isRunning", task.isRunning());
-                    status.put("isProcessAlive", crawlerService.isProcessRunning(id));
-                    status.put("pid", task.getPid());
-                    status.put("completedDomains", task.getCompletedDomains());
-                    status.put("totalDomains", task.getTotalDomains());
-                    return ResponseEntity.ok(ApiResponse.success(status));
-                })
-                .orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }

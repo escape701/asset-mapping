@@ -454,12 +454,6 @@ function showTestResult(type, title, message) {
     }
 }
 
-// 遮蔽 API Key
-function maskApiKey(key) {
-    if (!key || key.length < 8) return '****';
-    return key.substring(0, 4) + '****' + key.substring(key.length - 4);
-}
-
 // 显示消息
 function showMessage(message, type = 'info') {
     // 使用 common.js 中的 showMessage 或创建简单提示
