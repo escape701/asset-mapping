@@ -1557,6 +1557,28 @@
     color: #991b1b;
 }
 
+/* scope 标签 */
+.loginCardTag.scope {
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+/* signal 标签 */
+.loginCardTag.signal {
+    background: #f0f9ff;
+    color: #0369a1;
+    font-size: 10px;
+}
+
+/* 来源链接 */
+.loginCardReferrer {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.3;
+    word-break: break-all;
+}
+
 /* 登录检测错误 */
 .loginCardError {
     margin-top: 4px;

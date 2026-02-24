@@ -1021,6 +1021,7 @@ public class CrawlerService {
     
     /**
      * 处理 summary.json 变化
+     * summary.json 是域名结果数组: [{domain, landing_url, discovery, crawl}, ...]
      */
     @SuppressWarnings("unchecked")
     private void handleSummaryChange(Path summaryPath) {
@@ -1031,33 +1032,27 @@ public class CrawlerService {
             Task task = taskRepository.findById(taskId).orElse(null);
             if (task == null || !task.isRunning()) return;
             
-            // 读取 summary.json
-            Map<String, Object> summary = readJsonFile(summaryPath);
-            if (summary.isEmpty()) return;
+            // summary.json 是一个 JSON 数组
+            List<Map<String, Object>> domainResults = readJsonArrayFile(summaryPath);
+            if (domainResults.isEmpty()) return;
             
-            // 更新各域名结果
-            List<Map<String, Object>> domainResults = (List<Map<String, Object>>) summary.get("domains");
-            if (domainResults != null) {
-                int completed = 0;
-                for (Map<String, Object> result : domainResults) {
-                    String domain = (String) result.get("domain");
-                    updateDomainFromSummary(taskId, domain, result);
-                    
-                    // 检查是否完成
-                    Map<String, Object> crawl = (Map<String, Object>) result.get("crawl");
-                    if (crawl != null && crawl.get("total_visited") != null) {
-                        completed++;
-                    }
-                }
+            int completed = 0;
+            for (Map<String, Object> result : domainResults) {
+                String domain = (String) result.get("domain");
+                updateDomainFromSummary(taskId, domain, result);
                 
-                // 更新任务进度
-                task.setCompletedDomains(completed);
-                if (completed >= task.getTotalDomains()) {
-                    task.setStatus(Task.STATUS_COMPLETED);
-                    task.setFinishedAt(LocalDateTime.now());
+                Map<String, Object> crawl = (Map<String, Object>) result.get("crawl");
+                if (crawl != null && crawl.get("total_visited") != null) {
+                    completed++;
                 }
-                taskRepository.save(task);
             }
+            
+            task.setCompletedDomains(completed);
+            if (completed >= task.getTotalDomains()) {
+                task.setStatus(Task.STATUS_COMPLETED);
+                task.setFinishedAt(LocalDateTime.now());
+            }
+            taskRepository.save(task);
             
         } catch (Exception e) {
             log.error("处理 summary 变化失败: {}", summaryPath, e);
@@ -1323,8 +1318,29 @@ public class CrawlerService {
                                 taskDomain.setFinishedAt(LocalDateTime.now());
                             }
                         } else {
-                            // 有 crawl 数据但未完成，说明在爬取中
-                            taskDomain.setStatus(TaskDomain.STATUS_CRAWLING);
+                            // finished_at 为 null: 检查进程是否仍在运行
+                            String domainKey = taskId + "_" + domain;
+                            Process domainProcess = domainProcesses.get(domainKey);
+                            boolean domainProcessRunning = domainProcess != null && domainProcess.isAlive();
+                            
+                            if (domainProcessRunning) {
+                                taskDomain.setStatus(TaskDomain.STATUS_CRAWLING);
+                            } else {
+                                // 进程不在了但 finished_at 为 null，说明被中断或异常退出
+                                // 有数据则标记为完成，无数据则标记为失败
+                                int visited = getIntValue(stats != null ? stats : Collections.emptyMap(), "total_visited");
+                                if (visited > 0) {
+                                    taskDomain.setStatus(TaskDomain.STATUS_COMPLETED);
+                                    if (taskDomain.getFinishedAt() == null) {
+                                        taskDomain.setFinishedAt(LocalDateTime.now());
+                                    }
+                                } else {
+                                    taskDomain.setStatus(TaskDomain.STATUS_FAILED);
+                                    if (taskDomain.getFinishedAt() == null) {
+                                        taskDomain.setFinishedAt(LocalDateTime.now());
+                                    }
+                                }
+                            }
                         }
                     }
                 }

@@ -405,7 +405,18 @@ function loadMockData() {
                             depth: 1,
                             screenshot_path: 'screenshots\\pan.baidu.com__20260203_181421.png',
                             popup_login_screenshot_path: ['screenshots\\pan.baidu.com__login_popup_20260203_181421.png'],
-                            is_login_page: 'Login page with QR code and account login',
+                            is_login_page: 'YES - VERIFIED By gpt-5.2',
+                            login_detection: {
+                                scope: 'in_scope',
+                                signals: ['auth_keyword', 'password_input'],
+                                form_class: { policy: 'l+p+r', primary: '', matched: [] },
+                                llm_verification: {
+                                    confirmation: 'YES',
+                                    auth_types: ['QR code', 'email:pass'],
+                                    mfa_confirmation: 'NO MFA'
+                                }
+                            },
+                            login_detection_error: '',
                             discovered_at: '2026-02-03T18:14:21.749546'
                         },
                         {
@@ -415,7 +426,19 @@ function loadMockData() {
                             depth: 2,
                             screenshot_path: 'screenshots\\passport.baidu.com_v2__20260203_181439.png',
                             popup_login_screenshot_path: [],
-                            is_login_page: 'Main Baidu passport login page with username/password',
+                            is_login_page: 'YES - VERIFIED By gpt-5.2',
+                            login_detection: {
+                                scope: 'in_scope',
+                                referrer: 'https://pan.baidu.com/?from=1026962h',
+                                signals: ['url_login_related', 'password_input', 'auth_keyword'],
+                                form_class: { policy: 'l+p+r', primary: '', matched: [] },
+                                llm_verification: {
+                                    confirmation: 'YES',
+                                    auth_types: ['username:pass'],
+                                    mfa_confirmation: 'UNKNOWN'
+                                }
+                            },
+                            login_detection_error: '',
                             discovered_at: '2026-02-03T18:14:39.000000'
                         },
                         {
@@ -467,24 +490,47 @@ function extractLoginPages(visitedPages) {
     });
 }
 
+// 获取 login_detection 中的 LLM 验证信息（兼容新旧格式）
+function getLlmVerification(page) {
+    const det = page.login_detection;
+    if (!det) return null;
+    // 新格式: login_detection.llm_verification.auth_types
+    if (det.llm_verification) return det.llm_verification;
+    // 旧格式: login_detection.auth_types（直接在顶层）
+    if (det.auth_types) return det;
+    return null;
+}
+
+// 解析 is_login_page 值，分离核心判定和附加信息
+function parseLoginPageStatus(value) {
+    if (!value) return { status: '', detail: '' };
+    const str = value.toString().trim();
+    const upper = str.toUpperCase();
+    if (upper === 'YES' || upper === 'NO') return { status: upper, detail: '' };
+    // "YES - VERIFIED By gpt-5.2" -> status="YES", detail="VERIFIED By gpt-5.2"
+    const match = str.match(/^(YES|NO)\s*[-–]\s*(.+)$/i);
+    if (match) return { status: match[1].toUpperCase(), detail: match[2].trim() };
+    // 旧格式描述文字: "Login page with QR code..."
+    if (upper !== '' && upper !== 'FALSE') return { status: 'YES', detail: str };
+    return { status: '', detail: '' };
+}
+
 // 格式化登录页描述信息
 function formatLoginDesc(page) {
     const parts = [];
-    // 如果有 login_detection 详情，优先使用
-    if (page.login_detection) {
-        const det = page.login_detection;
-        if (det.auth_types && det.auth_types.length > 0) {
-            parts.push('认证方式: ' + det.auth_types.join(', '));
+    const llm = getLlmVerification(page);
+    if (llm) {
+        if (llm.auth_types && llm.auth_types.length > 0) {
+            parts.push('认证方式: ' + llm.auth_types.join(', '));
         }
-        if (det.mfa_confirmation) {
-            parts.push(det.mfa_confirmation === 'NO MFA' ? '无MFA' : 'MFA: ' + det.mfa_confirmation);
+        if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA') {
+            parts.push('MFA: ' + llm.mfa_confirmation);
         }
     }
-    // 如果没有 login_detection 详情，回退到 is_login_page 的描述文字
     if (parts.length === 0) {
-        const desc = page.is_login_page ? page.is_login_page.toString().trim() : '';
-        if (desc && desc.toUpperCase() !== 'YES' && desc.toUpperCase() !== 'NO') {
-            return desc;
+        const parsed = parseLoginPageStatus(page.is_login_page);
+        if (parsed.detail && !parsed.detail.toUpperCase().startsWith('VERIFIED')) {
+            return parsed.detail;
         }
     }
     return parts.join(' | ');
@@ -856,18 +902,40 @@ function renderResults() {
                                 <div class="loginCardTitle">${page.title || '登录页面'}</div>
                                 <div class="loginCardUrl">${page.url}</div>
                                 <div class="loginCardTags">
-                                    <span class="loginCardTag auth">登录页</span>
+                                    ${(() => {
+                                        const parsed = parseLoginPageStatus(page.is_login_page);
+                                        const verified = parsed.detail && parsed.detail.toUpperCase().startsWith('VERIFIED');
+                                        return `<span class="loginCardTag auth">${verified ? '已验证' : '登录页'}</span>`;
+                                    })()}
                                     ${hasPopups ? `<span class="loginCardTag popup">+${page.popup_login_screenshot_path.length}弹窗</span>` : ''}
                                     <span class="loginCardTag">${page.status_code}</span>
                                     <span class="loginCardTag depth">深度${page.depth || 0}</span>
-                                    ${page.login_detection && page.login_detection.auth_types && page.login_detection.auth_types.length > 0
-                                        ? page.login_detection.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('')
-                                        : ''}
-                                    ${page.login_detection && page.login_detection.mfa_confirmation && page.login_detection.mfa_confirmation !== 'NO MFA'
-                                        ? `<span class="loginCardTag mfa">MFA</span>`
-                                        : ''}
+                                    ${(() => {
+                                        const det = page.login_detection || {};
+                                        const scope = det.scope || '';
+                                        if (scope === 'external_one_hop') return '<span class="loginCardTag scope">外部跳转</span>';
+                                        if (scope && scope !== 'in_scope') return `<span class="loginCardTag scope">${scope}</span>`;
+                                        return '';
+                                    })()}
+                                    ${(() => {
+                                        const llm = getLlmVerification(page);
+                                        if (!llm) return '';
+                                        let tags = '';
+                                        if (llm.auth_types && llm.auth_types.length > 0) {
+                                            tags += llm.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('');
+                                        }
+                                        if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA' && llm.mfa_confirmation !== 'UNKNOWN') {
+                                            tags += '<span class="loginCardTag mfa">MFA</span>';
+                                        }
+                                        return tags;
+                                    })()}
+                                    ${(() => {
+                                        const signals = (page.login_detection || {}).signals || [];
+                                        return signals.map(s => `<span class="loginCardTag signal">${s.replace(/_/g, ' ')}</span>`).join('');
+                                    })()}
                                 </div>
                                 <div class="loginCardDesc">${formatLoginDesc(page)}</div>
+                                ${page.login_detection && page.login_detection.referrer ? `<div class="loginCardReferrer">来源: ${page.login_detection.referrer}</div>` : ''}
                                 ${page.login_detection_error ? `<div class="loginCardError">${page.login_detection_error}</div>` : ''}
                                 ${page.discovered_at ? `<div class="loginCardTime">发现于 ${formatTime(page.discovered_at)}</div>` : ''}
                             </div>
