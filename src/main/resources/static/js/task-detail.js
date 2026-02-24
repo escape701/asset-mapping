@@ -147,11 +147,10 @@ async function loadTaskDetail() {
             return;
         }
         
-        // 都失败了，使用模拟数据
-        loadMockData();
+        showLoadError('未找到任务数据，请检查任务ID是否正确。');
     } catch (error) {
         console.error('加载任务详情失败:', error);
-        loadMockData();
+        showLoadError('加载任务详情失败，请稍后重试。');
     }
 }
 
@@ -327,162 +326,19 @@ function transformApiResponse(apiData) {
 
 // 加载模拟数据（用于前端开发演示）
 // 模拟数据结构匹配 Python login_crawler 的实际输出格式（参考 baidu.com 运行结果）
-function loadMockData() {
-    taskData = {
-        taskId: taskId,
-        status: 'completed',
-        totalDomains: 1,
-        completedDomains: 1,
-        createdAt: new Date(Date.now() - 1800000).toISOString(),
-        domains: [
-            {
-                domain: 'baidu.com',
-                status: 'completed',
-                landingUrl: 'https://www.baidu.com/',
-                // discovery.json 格式 - 基于实际 Python 输出
-                discovery: {
-                    subdomains: [
-                        'www.baidu.com',
-                        'top.baidu.com',
-                        'image.baidu.com',
-                        'fanyi.baidu.com',
-                        'cp.baidu.com',
-                        'pan.baidu.com',
-                        'chat.baidu.com',
-                        'wenku.baidu.com',
-                        'jiankang.baidu.com',
-                        'xueshu.baidu.com',
-                        'news.baidu.com',
-                        'e.baidu.com',
-                        'haokan.baidu.com',
-                        'baike.baidu.com',
-                        'live.baidu.com',
-                        'zhidao.baidu.com',
-                        'map.baidu.com'
-                    ],
-                    urls: []
-                },
-                // crawl.json 格式 - 基于实际 Python 输出
-                crawl: {
-                    metadata: {
-                        start_url: 'https://www.baidu.com/',
-                        started_at: '2026-02-03T18:13:33.431700',
-                        finished_at: '2026-02-03T18:15:11.302332',
-                        duration_seconds: 97.87
-                    },
-                    statistics: {
-                        total_discovered: 906,
-                        total_visited: 20,
-                        total_failed: 1
-                    },
-                    visited_pages: [
-                        {
-                            url: 'https://www.baidu.com/',
-                            status_code: 200,
-                            title: '百度一下，你就知道',
-                            depth: 0,
-                            screenshot_path: 'screenshots\\www.baidu.com__20260203_181405.png',
-                            popup_login_screenshot_path: ['screenshots\\www.baidu.com__login_popup_20260203_181405.png'],
-                            is_login_page: '',
-                            discovered_at: '2026-02-03T18:14:05.667544'
-                        },
-                        {
-                            url: 'https://top.baidu.com/board?platform=pc&sa=pcindex_entry',
-                            status_code: 200,
-                            title: '百度热搜',
-                            depth: 1,
-                            screenshot_path: 'screenshots\\top.baidu.com_board_20260203_181418.png',
-                            popup_login_screenshot_path: ['screenshots\\top.baidu.com_board_login_popup_20260203_181418.png'],
-                            is_login_page: '',
-                            discovered_at: '2026-02-03T18:14:18.336881'
-                        },
-                        {
-                            url: 'https://image.baidu.com/',
-                            status_code: 200,
-                            title: '百度图片 | 免费AI图像生成工具与海量高清图平台',
-                            depth: 1,
-                            screenshot_path: 'screenshots\\image.baidu.com__20260203_181418.png',
-                            popup_login_screenshot_path: ['screenshots\\image.baidu.com__login_popup_20260203_181418.png'],
-                            is_login_page: '',
-                            discovered_at: '2026-02-03T18:14:18.868676'
-                        },
-                        {
-                            url: 'https://pan.baidu.com/?from=1026962h',
-                            status_code: 200,
-                            title: '百度网盘-免费云盘丨文件共享软件丨超大容量丨存储安全',
-                            depth: 1,
-                            screenshot_path: 'screenshots\\pan.baidu.com__20260203_181421.png',
-                            popup_login_screenshot_path: ['screenshots\\pan.baidu.com__login_popup_20260203_181421.png'],
-                            is_login_page: 'YES - VERIFIED By gpt-5.2',
-                            login_detection: {
-                                scope: 'in_scope',
-                                signals: ['auth_keyword', 'password_input'],
-                                form_class: { policy: 'l+p+r', primary: '', matched: [] },
-                                llm_verification: {
-                                    confirmation: 'YES',
-                                    auth_types: ['QR code', 'email:pass'],
-                                    mfa_confirmation: 'NO MFA'
-                                }
-                            },
-                            login_detection_error: '',
-                            discovered_at: '2026-02-03T18:14:21.749546'
-                        },
-                        {
-                            url: 'https://passport.baidu.com/v2/',
-                            status_code: 200,
-                            title: '百度账号登录',
-                            depth: 2,
-                            screenshot_path: 'screenshots\\passport.baidu.com_v2__20260203_181439.png',
-                            popup_login_screenshot_path: [],
-                            is_login_page: 'YES - VERIFIED By gpt-5.2',
-                            login_detection: {
-                                scope: 'in_scope',
-                                referrer: 'https://pan.baidu.com/?from=1026962h',
-                                signals: ['url_login_related', 'password_input', 'auth_keyword'],
-                                form_class: { policy: 'l+p+r', primary: '', matched: [] },
-                                llm_verification: {
-                                    confirmation: 'YES',
-                                    auth_types: ['username:pass'],
-                                    mfa_confirmation: 'UNKNOWN'
-                                }
-                            },
-                            login_detection_error: '',
-                            discovered_at: '2026-02-03T18:14:39.000000'
-                        },
-                        {
-                            url: 'https://wenku.baidu.com/?fr=bdpcindex',
-                            status_code: 200,
-                            title: '百度文库 - 一站式AI内容获取和创作平台',
-                            depth: 1,
-                            screenshot_path: 'screenshots\\wenku.baidu.com__20260203_181421.png',
-                            popup_login_screenshot_path: ['screenshots\\wenku.baidu.com__login_popup_20260203_181422.png'],
-                            is_login_page: '',
-                            discovered_at: '2026-02-03T18:14:22.438926'
-                        },
-                        {
-                            url: 'https://zhidao.baidu.com/',
-                            status_code: 200,
-                            title: '百度知道 - 全球领先中文互动问答平台',
-                            depth: 1,
-                            screenshot_path: 'screenshots\\zhidao.baidu.com__20260203_181427.png',
-                            popup_login_screenshot_path: ['screenshots\\zhidao.baidu.com__login_popup_20260203_181428.png'],
-                            is_login_page: '',
-                            discovered_at: '2026-02-03T18:14:28.241736'
-                        }
-                    ],
-                    discovered_urls: [
-                        'https://tieba.baidu.com/',
-                        'https://passport.baidu.com/v2/',
-                        'https://www.baidu.com/more/'
-                    ],
-                    failed_urls: ['http://news.baidu.com/']
-                }
-            }
-        ]
-    };
-    
-    renderTaskOverview();
-    renderDomainList();
+function showLoadError(msg) {
+    const domainList = document.getElementById('domainList');
+    if (domainList) {
+        domainList.innerHTML = `
+            <div style="padding:40px 20px;text-align:center;color:#6b7280;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" style="margin:0 auto 12px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <div style="font-size:15px;font-weight:500;margin-bottom:4px;">${msg}</div>
+            </div>`;
+    }
 }
 
 // 判断单个页面是否为登录页（兼容新旧格式）
@@ -1489,132 +1345,6 @@ function buildContext() {
     });
     
     return context;
-}
-
-// 生成模拟回复（用于前端开发演示）
-function generateMockReply(message, context) {
-    const lowerMessage = message.toLowerCase();
-    
-    const subdomains = selectedDomain?.discovery?.subdomains || [];
-    const loginPages = extractLoginPages(selectedDomain?.crawl?.visited_pages);
-    const stats = selectedDomain?.crawl?.statistics || {};
-    
-    if (lowerMessage.includes('安全') || lowerMessage.includes('风险')) {
-        return `基于对 ${selectedDomain?.domain || '该域名'} 的测绘分析，我发现以下安全风险点：
-
-**高风险：**
-1. 发现了 ${loginPages.length} 个登录入口，建议检查是否存在弱密码或暴力破解风险
-2. 爆破出 ${subdomains.length} 个子域名，部分可能存在未授权访问
-3. admin、api、sso 等敏感子域名暴露在外
-
-**中风险：**
-1. 已访问 ${stats.total_visited || 0} 个页面，其中 ${stats.total_failed || 0} 个访问失败
-2. 发现可能的敏感目录需要进一步检查
-
-**建议措施：**
-- 对所有登录入口启用多因素认证
-- 审查所有子域名的访问控制策略
-- 检查失败URL是否存在安全隐患
-- 定期进行安全审计`;
-    }
-    
-    if (lowerMessage.includes('子域名') || lowerMessage.includes('subdomain')) {
-        if (subdomains.length === 0) {
-            return '当前域名暂未发现子域名。建议使用更多字典进行爆破，或检查DNS配置。';
-        }
-        return `在 ${selectedDomain?.domain} 中共爆破出 ${subdomains.length} 个子域名：
-
-${subdomains.map((s, i) => `${i + 1}. **${s}**`).join('\n')}
-
-**重点关注：**
-- admin、api、portal 等管理类子域名
-- sso、auth、login 等认证相关子域名
-- dev、test、staging 等测试环境
-- 内部使用的子域名可能配置不当`;
-    }
-    
-    if (lowerMessage.includes('登录')) {
-        if (loginPages.length === 0) {
-            return '当前域名暂未发现明显的登录入口。建议检查是否存在隐藏的认证接口或第三方认证集成。';
-        }
-        return `在 ${selectedDomain?.domain} 中共发现 ${loginPages.length} 个登录入口：
-
-${loginPages.map((page, i) => {
-    const det = page.login_detection || {};
-    const llm = getLlmVerification(page);
-    let text = `${i + 1}. **${page.url}**
-   - 标题: ${page.title || '无'}
-   - LLM识别结果: ${page.is_login_page}
-   - 截图: ${page.screenshot_path ? '已截取' : '无'}
-   - 弹窗截图: ${page.popup_login_screenshot_path?.length || 0} 个`;
-    if (llm?.auth_types?.length) text += `\n   - 认证方式: ${llm.auth_types.join(', ')}`;
-    if (det.scope) text += `\n   - 范围: ${det.scope}`;
-    if (det.signals?.length) text += `\n   - 信号: ${det.signals.join(', ')}`;
-    return text;
-}).join('\n\n')}
-
-建议对每个登录入口进行安全测试，包括：
-- 密码强度策略检查
-- 暴力破解防护
-- 会话管理安全性
-- CSRF防护`;
-    }
-    
-    if (lowerMessage.includes('敏感') || lowerMessage.includes('路径')) {
-        const discoveredUrls = selectedDomain?.discovery?.urls || [];
-        return `基于测绘结果，以下路径值得关注：
-
-**发现的URL（共 ${discoveredUrls.length} 个）：**
-${discoveredUrls.slice(0, 10).map(url => `- ${url}`).join('\n')}
-${discoveredUrls.length > 10 ? `\n... 还有 ${discoveredUrls.length - 10} 个` : ''}
-
-**常见敏感路径检查建议：**
-- /.git - 源码泄露风险
-- /admin - 管理后台
-- /api - 接口文档可能泄露
-- /backup - 备份文件
-- /config - 配置文件
-
-**建议：**
-1. 确保这些路径有适当的访问控制
-2. 检查是否存在目录遍历漏洞
-3. 验证上传功能的安全性`;
-    }
-    
-    if (lowerMessage.includes('建议') || lowerMessage.includes('总结')) {
-        return `## ${selectedDomain?.domain || '该域名'} 测绘结果总结
-
-### 发现概览
-- 子域名数: ${subdomains.length}
-- 登录入口: ${loginPages.length}
-- 总发现URL: ${stats.total_discovered || 0}
-- 已访问页面: ${stats.total_visited || 0}
-- 失败页面: ${stats.total_failed || 0}
-
-### 安全建议
-1. **子域名管理**: 审查所有 ${subdomains.length} 个子域名，关闭不必要的测试/开发环境
-2. **身份认证**: 对所有 ${loginPages.length} 个登录入口实施多因素认证
-3. **访问控制**: 限制敏感目录和管理后台的公网访问
-4. **API安全**: 对API接口添加速率限制和认证机制
-5. **监控告警**: 部署安全监控，及时发现异常访问
-
-### 后续步骤
-- 进行详细的漏洞扫描
-- 渗透测试验证安全措施有效性
-- 定期复测确保安全态势`;
-    }
-    
-    return `我已收到您的问题。基于当前对 ${selectedDomain?.domain || '域名'} 的测绘数据分析：
-
-- 爆破出 ${subdomains.length} 个子域名
-- 识别出 ${loginPages.length} 个登录入口（通过LLM自动识别）
-- 总共发现 ${stats.total_discovered || 0} 个URL
-
-您可以问我更具体的问题，比如：
-- "分析这个域名的安全风险"
-- "总结发现的所有子域名"
-- "总结发现的所有登录入口"
-- "有哪些敏感路径需要关注"`;
 }
 
 // 消息计数器，确保每条消息 ID 唯一
