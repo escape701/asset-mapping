@@ -8,20 +8,23 @@ let logPollingInterval = null;
 let lastLogLine = 0;
 let autoScrollLogs = true;
 let confidenceFilter = 'all';
+let authTypeFilter = 'all';
+let mfaFilter = 'all';
+let easyBreachFilter = false;
 
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', () => {
     // 从URL获取任务ID
     const pathParts = window.location.pathname.split('/');
     taskId = pathParts[pathParts.length - 1];
-    
+
     document.getElementById('taskTitle').textContent = `任务 ${taskId}`;
 
     initTabs();
     initChat();
     initConfirmModal();
     loadTaskDetail();
-    
+
     // 启动轮询
     startPolling();
 });
@@ -33,10 +36,10 @@ function initTabs() {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            
+
             const prevTab = currentTab;
             currentTab = tab.dataset.tab;
-            
+
             // 切换到日志标签页时开始轮询，离开时停止
             // pending 状态也启动轮询，因为实际可能已经在运行
             if (currentTab === 'logs' && (taskData?.status === 'running' || taskData?.status === 'pending')) {
@@ -44,11 +47,11 @@ function initTabs() {
             } else if (prevTab === 'logs') {
                 stopLogPolling();
             }
-            
+
             renderResults();
         });
     });
-    
+
     // 初始化截图模态框
     initScreenshotModal();
 }
@@ -89,10 +92,10 @@ function initChat() {
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
     const quickActions = document.querySelectorAll('.quickActionBtn');
-    
+
     // 发送按钮点击
     sendBtn.addEventListener('click', sendMessage);
-    
+
     // Enter 发送（Shift+Enter 换行）
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -100,13 +103,13 @@ function initChat() {
             sendMessage();
         }
     });
-    
+
     // 自动调整高度
     chatInput.addEventListener('input', () => {
         chatInput.style.height = 'auto';
         chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
     });
-    
+
     // 快捷操作
     quickActions.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -123,31 +126,31 @@ async function loadTaskDetail() {
         // 尝试从正常任务 API 获取
         let response = await fetch(`/api/tasks/${taskId}`);
         let result = await response.json();
-        
+
         if (result.code === 200 && result.data) {
             taskData = transformApiResponse(result.data);
             renderTaskOverview();
             renderDomainList();
-            
+
             // 如果任务正在运行，尝试同步一次进度
             if (taskData.status === 'running') {
                 setTimeout(() => syncTaskProgress(), 2000);
             }
             return;
         }
-        
+
         // 如果任务不存在，尝试 demo API（直接从 Python 输出读取）
         // taskId 可能是域名，如 "baidu.com"
         response = await fetch(`/api/tasks/demo/${taskId}`);
         result = await response.json();
-        
+
         if (result.code === 200 && result.data) {
             taskData = transformApiResponse(result.data);
             renderTaskOverview();
             renderDomainList();
             return;
         }
-        
+
         showLoadError('未找到任务数据，请检查任务ID是否正确。');
     } catch (error) {
         console.error('加载任务详情失败:', error);
@@ -158,7 +161,7 @@ async function loadTaskDetail() {
 // 同步任务进度（从 Python 输出文件读取）
 async function syncTaskProgress(silent = false) {
     const syncBtn = document.getElementById('syncBtn');
-    
+
     // 禁用按钮并显示加载状态
     if (syncBtn && !silent) {
         syncBtn.disabled = true;
@@ -171,19 +174,19 @@ async function syncTaskProgress(silent = false) {
             同步中...
         `;
     }
-    
+
     try {
         const response = await fetch(`/api/tasks/${taskId}/sync`, {
             method: 'POST'
         });
         const result = await response.json();
-        
+
         if (result.code === 200 && result.data) {
             const oldStatus = taskData?.status;
             const oldCompletedDomains = taskData?.completedDomains || 0;
-            
+
             taskData = transformApiResponse(result.data);
-            
+
             // 更新选中的域名数据
             if (selectedDomain) {
                 const updatedDomain = taskData.domains.find(d => d.domain === selectedDomain.domain);
@@ -191,14 +194,14 @@ async function syncTaskProgress(silent = false) {
                     selectedDomain = updatedDomain;
                 }
             }
-            
+
             // 检查域名数据是否有变化（用于判断是否需要强制刷新）
             const newCompletedDomains = taskData.completedDomains;
             const domainsChanged = oldCompletedDomains !== newCompletedDomains;
-            
+
             renderTaskOverview();
             renderDomainList();
-            
+
             // 刷新当前标签页内容（日志标签页除外，避免打断日志显示）
             // 如果域名完成数有变化，强制刷新以显示最新数据
             if (currentTab !== 'logs' || domainsChanged) {
@@ -206,23 +209,23 @@ async function syncTaskProgress(silent = false) {
                     renderResults();
                 }
             }
-            
+
             // 更新日志状态显示
             updateLogsStatus();
-            
+
             // 如果任务状态从 pending 变为 running，确保日志轮询已启动
             if (oldStatus === 'pending' && taskData.status === 'running') {
                 if (currentTab === 'logs' && !logPollingInterval) {
                     startLogPolling();
                 }
             }
-            
+
             // 如果任务状态从运行中变为完成，执行完成时的清理操作
             if ((oldStatus === 'running' || oldStatus === 'pending') &&
                 (taskData.status === 'completed' || taskData.status === 'failed' || taskData.status === 'stopped')) {
                 handleTaskCompletion();
             }
-            
+
             if (!silent && typeof showMessage === 'function') {
                 showMessage('进度同步成功', 'success');
             }
@@ -256,7 +259,7 @@ async function syncTaskProgress(silent = false) {
 function updateLogsStatus() {
     const logsStatus = document.getElementById('logsStatus');
     if (!logsStatus) return;
-    
+
     let statusText = '等待中';
     let statusClass = 'pending';
     switch (taskData?.status) {
@@ -281,7 +284,7 @@ function updateLogsStatus() {
             statusClass = 'pending';
             break;
     }
-    
+
     logsStatus.className = `logsStatus ${statusClass}`;
     logsStatus.textContent = statusText;
 }
@@ -373,6 +376,44 @@ function getConfidenceLevel(page) {
     return 'LOW';
 }
 
+// 获取页面的认证类型列表（统一大写）
+function getPageAuthTypes(page) {
+    const llm = getLlmVerification(page);
+    if (!llm || !llm.auth_types || llm.auth_types.length === 0) return ['UNKNOWN'];
+    return llm.auth_types.map(t => t.toUpperCase());
+}
+
+// 获取页面的 MFA 状态（统一大写）
+function getPageMfa(page) {
+    const llm = getLlmVerification(page);
+    if (!llm || !llm.mfa_confirmation) return 'UNKNOWN';
+    return llm.mfa_confirmation.toUpperCase();
+}
+
+// 判断页面是否为"易突破入口"：auth_types 含 email:pass 或 uid:pass 且 mfa == NO MFA
+function isEasyBreach(page) {
+    const types = getPageAuthTypes(page);
+    const mfa = getPageMfa(page);
+    const hasWeakAuth = types.some(t => t === 'EMAIL:PASS' || t === 'UID:PASS');
+    return hasWeakAuth && mfa === 'NO MFA';
+}
+
+// 综合过滤：置信度 + 认证类型 + MFA + 易突破
+function applyLoginFilters(pages) {
+    return pages.filter(p => {
+        if (easyBreachFilter) return isEasyBreach(p);
+        if (confidenceFilter !== 'all' && getConfidenceLevel(p) !== confidenceFilter) return false;
+        if (authTypeFilter !== 'all') {
+            const types = getPageAuthTypes(p);
+            if (!types.some(t => t === authTypeFilter)) return false;
+        }
+        if (mfaFilter !== 'all') {
+            if (getPageMfa(p) !== mfaFilter) return false;
+        }
+        return true;
+    });
+}
+
 // 解析 is_login_page 值，分离核心判定和附加信息
 function parseLoginPageStatus(value) {
     if (!value) return { status: '', detail: '' };
@@ -411,12 +452,12 @@ function formatLoginDesc(page) {
 // 将本地截图路径转换为可访问的URL
 function getScreenshotUrl(screenshotPath) {
     if (!screenshotPath) return null;
-    
+
     // 如果已经是完整URL，直接返回
     if (screenshotPath.startsWith('http://') || screenshotPath.startsWith('https://')) {
         return screenshotPath;
     }
-    
+
     // 将 Python 输出的路径转换为后端 API URL
     // Python 输出格式: "screenshots\\xxx.png" 或 "screenshots/xxx.png"
     // 后端 API: /api/screenshots/file?path=screenshots/xxx.png&taskId=xxx
@@ -432,7 +473,7 @@ function getScreenshotUrl(screenshotPath) {
 function renderTaskOverview() {
     document.getElementById('taskId').textContent = taskData.taskId;
     document.getElementById('taskCreatedAt').textContent = formatDateTime(taskData.createdAt);
-    
+
     // 状态
     const statusEl = document.getElementById('taskStatus');
     const statusClass = {
@@ -441,17 +482,17 @@ function renderTaskOverview() {
         'completed': 'statusCompleted',
         'failed': 'statusFailed'
     }[taskData.status] || 'statusPending';
-    
+
     const statusText = {
         'pending': '等待中',
         'running': '运行中',
         'completed': '已完成',
         'failed': '失败'
     }[taskData.status] || '未知';
-    
+
     statusEl.className = `taskStatus ${statusClass}`;
     statusEl.textContent = statusText;
-    
+
     // 进度
     const progress = taskData.totalDomains > 0
         ? Math.round((taskData.completedDomains / taskData.totalDomains) * 100)
@@ -464,9 +505,9 @@ function renderTaskOverview() {
 function renderDomainList() {
     const domainList = document.getElementById('domainList');
     const domainTotal = document.getElementById('domainTotal');
-    
+
     domainTotal.textContent = `共 ${taskData.domains.length} 个`;
-    
+
     domainList.innerHTML = taskData.domains.map((domain, index) => {
         const statusIcon = getStatusIcon(domain.status);
         // 兼容不同的数据格式
@@ -487,7 +528,7 @@ function renderDomainList() {
             subdomainCount = hosts.size;
         }
         const loginCount = extractLoginPages(domain.crawl?.visited_pages).length;
-        
+
         // 计算资产路径数（已访问页面数）
         let assetCount = 0;
         if (domain.crawl?.visited_pages) {
@@ -495,11 +536,11 @@ function renderDomainList() {
         } else if (domain.crawl?.statistics?.total_visited) {
             assetCount = domain.crawl.statistics.total_visited;
         }
-        
+
         // 检查是否有错误
         const hasError = domain.discovery?.error || domain.crawl?.error;
         const errorClass = hasError ? 'has-error' : '';
-        
+
         return `
             <div class="domainItem ${index === 0 ? 'active' : ''} ${errorClass}" data-index="${index}">
                 <div class="domainIcon">
@@ -518,7 +559,7 @@ function renderDomainList() {
             </div>
         `;
     }).join('');
-    
+
     // 绑定点击事件
     const domainItems = domainList.querySelectorAll('.domainItem');
     domainItems.forEach(item => {
@@ -531,7 +572,7 @@ function renderDomainList() {
             renderResults();
         });
     });
-    
+
     // 保持之前选中的域名，或默认选中第一个
     if (taskData.domains.length > 0) {
         if (selectedDomain) {
@@ -617,7 +658,7 @@ function formatTime(isoString) {
 // 渲染结果
 function renderResults() {
     const resultContent = document.getElementById('resultContent');
-    
+
     if (!selectedDomain) {
         resultContent.innerHTML = `
             <div class="resultEmpty">
@@ -631,7 +672,7 @@ function renderResults() {
         `;
         return;
     }
-    
+
     switch (currentTab) {
         case 'subdomains':
             // 子域名列表（纯字符串数组）
@@ -655,12 +696,12 @@ function renderResults() {
                 });
                 subdomains = Array.from(visitedHosts);
             }
-            
+
             // 获取 discovery 元数据和错误信息
             const discoveryMeta = selectedDomain.discovery?.metadata || {};
             const discoveryError = selectedDomain.discovery?.error;
             const discoveryStats = selectedDomain.discovery?.statistics || {};
-            
+
             // 构建统计信息头部
             let subdomainHeader = '';
             if (discoveryMeta.started_at || discoveryMeta.duration_seconds || discoveryError) {
@@ -684,7 +725,7 @@ function renderResults() {
                     </div>
                 `;
             }
-            
+
             resultContent.innerHTML = subdomainHeader + (subdomains.length > 0 ? `
                 <ul class="resultList">
                     ${subdomains.map(subdomain => `
@@ -711,27 +752,34 @@ function renderResults() {
                 </ul>
             ` : '<div class="resultEmpty"><p>暂无发现的子域名</p></div>');
             break;
-            
+
         case 'logins':
             // 从 visited_pages 中提取登录页面
             const allLoginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
 
-            // 统计各置信度数量
+            // 统计各维度数量
             const confidenceCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
-            allLoginPages.forEach(p => confidenceCounts[getConfidenceLevel(p)]++);
+            const authTypeCounts = {};
+            const mfaCounts = {};
+            let easyBreachCount = 0;
+            allLoginPages.forEach(p => {
+                confidenceCounts[getConfidenceLevel(p)]++;
+                getPageAuthTypes(p).forEach(t => { authTypeCounts[t] = (authTypeCounts[t] || 0) + 1; });
+                const mfa = getPageMfa(p);
+                mfaCounts[mfa] = (mfaCounts[mfa] || 0) + 1;
+                if (isEasyBreach(p)) easyBreachCount++;
+            });
 
-            // 按当前过滤器筛选
-            const loginPages = confidenceFilter === 'all'
-                ? allLoginPages
-                : allLoginPages.filter(p => getConfidenceLevel(p) === confidenceFilter);
+            // 综合过滤
+            const loginPages = applyLoginFilters(allLoginPages);
 
             // 存储到全局变量供点击使用（用过滤后的列表）
             window.currentLoginPages = loginPages;
-            
+
             // 获取 crawl 元数据
             const crawlMeta = selectedDomain.crawl?.metadata || {};
             const crawlStats = selectedDomain.crawl?.statistics || {};
-            
+
             // 构建统计信息头部
             let loginHeader = '';
             if (crawlMeta.started_at || crawlMeta.duration_seconds) {
@@ -752,26 +800,67 @@ function renderResults() {
                 `;
             }
 
-            // 置信度过滤器栏
-            const confidenceFilterBar = `
-                <div class="confidenceFilterBar">
-                    <span class="confidenceFilterLabel">置信度:</span>
-                    <button class="confidenceFilterBtn ${confidenceFilter === 'all' ? 'active' : ''}" data-level="all">
-                        全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
-                    </button>
-                    <button class="confidenceFilterBtn cfHigh ${confidenceFilter === 'HIGH' ? 'active' : ''}" data-level="HIGH">
-                        高 <span class="confidenceFilterCount">${confidenceCounts.HIGH}</span>
-                    </button>
-                    <button class="confidenceFilterBtn cfMedium ${confidenceFilter === 'MEDIUM' ? 'active' : ''}" data-level="MEDIUM">
-                        中 <span class="confidenceFilterCount">${confidenceCounts.MEDIUM}</span>
-                    </button>
-                    <button class="confidenceFilterBtn cfLow ${confidenceFilter === 'LOW' ? 'active' : ''}" data-level="LOW">
-                        低 <span class="confidenceFilterCount">${confidenceCounts.LOW}</span>
-                    </button>
+            // 认证类型按钮定义（key -> 显示名）
+            const authTypeDefs = [
+                ['all', '全部'],
+                ['EMAIL:PASS', '邮箱密码'],
+                ['UID:PASS', '用户名密码'],
+                ['OAUTH', 'OAuth'],
+                ['OIDC', 'OIDC'],
+                ['UNKNOWN', '未知']
+            ];
+
+            // 多维过滤器栏
+            const hasAnyFilter = confidenceFilter !== 'all' || authTypeFilter !== 'all' || mfaFilter !== 'all' || easyBreachFilter;
+            const filterBarHtml = `
+                <div class="loginFilterBar">
+                    <div class="loginFilterRow">
+                        <button class="easyBreachBtn ${easyBreachFilter ? 'active' : ''}" data-action="easyBreach">
+                            ⚡ 易突破入口 <span class="confidenceFilterCount">${easyBreachCount}</span>
+                        </button>
+                        ${hasAnyFilter ? `<button class="filterResetBtn" data-action="resetAll">清除过滤</button>` : ''}
+                    </div>
+                    <div class="loginFilterRow">
+                        <span class="confidenceFilterLabel">置信度:</span>
+                        <button class="confidenceFilterBtn ${confidenceFilter === 'all' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="all">
+                            全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
+                        </button>
+                        <button class="confidenceFilterBtn cfHigh ${confidenceFilter === 'HIGH' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="HIGH">
+                            高 <span class="confidenceFilterCount">${confidenceCounts.HIGH}</span>
+                        </button>
+                        <button class="confidenceFilterBtn cfMedium ${confidenceFilter === 'MEDIUM' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="MEDIUM">
+                            中 <span class="confidenceFilterCount">${confidenceCounts.MEDIUM}</span>
+                        </button>
+                        <button class="confidenceFilterBtn cfLow ${confidenceFilter === 'LOW' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="LOW">
+                            低 <span class="confidenceFilterCount">${confidenceCounts.LOW}</span>
+                        </button>
+                    </div>
+                    <div class="loginFilterRow">
+                        <span class="confidenceFilterLabel">认证类型:</span>
+                        ${authTypeDefs.map(([key, label]) => {
+                const cnt = key === 'all' ? allLoginPages.length : (authTypeCounts[key] || 0);
+                const isActive = authTypeFilter === key && !easyBreachFilter;
+                return `<button class="confidenceFilterBtn cfAuth ${isActive ? 'active' : ''}" data-group="authType" data-level="${key}">
+                                ${label} <span class="confidenceFilterCount">${cnt}</span>
+                            </button>`;
+            }).join('')}
+                    </div>
+                    <div class="loginFilterRow">
+                        <span class="confidenceFilterLabel">MFA:</span>
+                        <button class="confidenceFilterBtn cfMfa ${mfaFilter === 'all' && !easyBreachFilter ? 'active' : ''}" data-group="mfa" data-level="all">
+                            全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
+                        </button>
+                        <button class="confidenceFilterBtn cfMfa ${mfaFilter === 'NO MFA' && !easyBreachFilter ? 'active' : ''}" data-group="mfa" data-level="NO MFA">
+                            无MFA <span class="confidenceFilterCount">${mfaCounts['NO MFA'] || 0}</span>
+                        </button>
+                        <button class="confidenceFilterBtn cfMfa ${mfaFilter === 'UNKNOWN' && !easyBreachFilter ? 'active' : ''}" data-group="mfa" data-level="UNKNOWN">
+                            未确认 <span class="confidenceFilterCount">${mfaCounts['UNKNOWN'] || 0}</span>
+                        </button>
+                    </div>
                 </div>
             `;
 
-            resultContent.innerHTML = loginHeader + confidenceFilterBar + (loginPages.length > 0 ? `
+            resultContent.innerHTML = loginHeader + filterBarHtml + (loginPages.length > 0 ? `
                 <div class="loginCardGrid">
                     ${loginPages.map((page, index) => {
                 const screenshotUrl = getScreenshotUrl(page.screenshot_path);
@@ -850,28 +939,52 @@ function renderResults() {
                         </div>
                     `}).join('')}
                 </div>
-            ` : `<div class="resultEmpty"><p>${confidenceFilter !== 'all' ? '当前过滤条件下暂无登录入口' : '暂无发现的登录入口'}</p></div>`);
+            ` : `<div class="resultEmpty"><p>${hasAnyFilter ? '当前过滤条件下暂无登录入口' : '暂无发现的登录入口'}</p></div>`);
 
             // 绑定过滤器按钮事件
             resultContent.querySelectorAll('.confidenceFilterBtn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    confidenceFilter = btn.dataset.level;
+                    easyBreachFilter = false;
+                    const group = btn.dataset.group;
+                    const level = btn.dataset.level;
+                    if (group === 'confidence') confidenceFilter = level;
+                    else if (group === 'authType') authTypeFilter = level;
+                    else if (group === 'mfa') mfaFilter = level;
                     renderResults();
                 });
             });
+            const easyBreachBtn = resultContent.querySelector('.easyBreachBtn');
+            if (easyBreachBtn) {
+                easyBreachBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    easyBreachFilter = !easyBreachFilter;
+                    renderResults();
+                });
+            }
+            const resetBtn = resultContent.querySelector('.filterResetBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    confidenceFilter = 'all';
+                    authTypeFilter = 'all';
+                    mfaFilter = 'all';
+                    easyBreachFilter = false;
+                    renderResults();
+                });
+            }
             break;
-            
+
         case 'assets':
             // 资产路径：显示所有发现的URL
             const discoveredUrls = selectedDomain.crawl?.discovered_urls || selectedDomain.discovery?.urls || [];
             const visitedPages = selectedDomain.crawl?.visited_pages || [];
             const failedUrls = selectedDomain.crawl?.failed_urls || [];
-            
+
             // 获取 crawl 统计信息
             const assetCrawlMeta = selectedDomain.crawl?.metadata || {};
             const assetCrawlStats = selectedDomain.crawl?.statistics || {};
-            
+
             // 构建统计信息头部
             let assetHeader = `
                 <div class="resultStatsHeader">
@@ -887,10 +1000,10 @@ function renderResults() {
                     </div>
                 </div>
             `;
-            
+
             // 合并所有URL展示
             let assetContent = '';
-            
+
             // 已访问页面
             if (visitedPages.length > 0) {
                 assetContent += `
@@ -930,7 +1043,7 @@ function renderResults() {
                     </div>
                 `;
             }
-            
+
             // 失败URL列表
             if (failedUrls.length > 0) {
                 assetContent += `
@@ -963,7 +1076,7 @@ function renderResults() {
                     </div>
                 `;
             }
-            
+
             // 未访问的发现URL（最多显示100个）
             const unvisitedUrls = discoveredUrls.filter(url => !visitedPages.some(p => p.url === url) && !failedUrls.includes(url));
             if (unvisitedUrls.length > 0) {
@@ -995,10 +1108,10 @@ function renderResults() {
                     </div>
                 `;
             }
-            
+
             resultContent.innerHTML = assetHeader + (assetContent || '<div class="resultEmpty"><p>暂无发现的资产路径</p></div>');
             break;
-            
+
         case 'logs':
             // 实时日志
             renderLogsTab(resultContent);
@@ -1033,7 +1146,7 @@ function renderLogsTab(container) {
             statusClass = 'pending';
             break;
     }
-    
+
     container.innerHTML = `
         <div class="logsContainer">
             <div class="logsHeader">
@@ -1081,24 +1194,24 @@ function renderLogsTab(container) {
             </div>
         </div>
     `;
-    
+
     // 绑定事件
     document.getElementById('autoScrollCheck').addEventListener('change', (e) => {
         autoScrollLogs = e.target.checked;
     });
-    
+
     document.getElementById('refreshLogsBtn').addEventListener('click', () => {
         loadLogs(true);
     });
-    
+
     document.getElementById('clearLogsBtn').addEventListener('click', () => {
         document.getElementById('logsContent').innerHTML = '<div class="logsEmpty">日志已清空，等待新日志...</div>';
         lastLogLine = 0;
     });
-    
+
     // 开始加载日志
     loadLogs(true);
-    
+
     // 开始轮询（如果任务正在运行或待启动状态）
     // pending 状态也启动轮询，因为实际可能已经在运行（状态更新滞后）
     if (taskData?.status === 'running' || taskData?.status === 'pending') {
@@ -1110,7 +1223,7 @@ function renderLogsTab(container) {
 async function loadLogs(fullReload = false) {
     const logsContent = document.getElementById('logsContent');
     if (!logsContent) return;
-    
+
     try {
         let url;
         if (fullReload) {
@@ -1121,13 +1234,13 @@ async function loadLogs(fullReload = false) {
             // 增量加载
             url = `/api/tasks/${taskId}/logs?fromLine=${lastLogLine}&lines=100`;
         }
-        
+
         const response = await fetch(url);
         const result = await response.json();
-        
+
         if (result.code === 200 && result.data) {
             const { lines, totalLines, fromLine, hasMore } = result.data;
-            
+
             if (fullReload) {
                 // 全量替换
                 if (lines && lines.length > 0) {
@@ -1163,13 +1276,13 @@ async function loadLogs(fullReload = false) {
                     lastLogLine += lines.length;
                 }
             }
-            
+
             // 更新信息
             const logsInfo = document.getElementById('logsInfo');
             if (logsInfo) {
                 logsInfo.textContent = `共 ${totalLines} 行`;
             }
-            
+
             // 自动滚动到底部
             if (autoScrollLogs) {
                 logsContent.scrollTop = logsContent.scrollHeight;
@@ -1186,9 +1299,9 @@ async function loadLogs(fullReload = false) {
 // 开始日志轮询
 function startLogPolling() {
     stopLogPolling(); // 先停止之前的轮询
-    
 
-    
+
+
     logPollingInterval = setInterval(() => {
         if (currentTab === 'logs') {
             // 检查任务是否还在运行（pending 或 running 都视为运行中）
@@ -1265,23 +1378,23 @@ function renderScreenshotGallery() {
 async function sendMessage() {
     const chatInput = document.getElementById('chatInput');
     const message = chatInput.value.trim();
-    
+
     if (!message) return;
-    
+
     // 添加用户消息
     appendMessage('user', message);
     chatInput.value = '';
     chatInput.style.height = 'auto';
-    
+
     // 显示加载状态
     const loadingId = appendMessage('assistant', null, true);
-    
+
     // 构建上下文（包含整个任务的所有域名）
     const context = buildContext();
-    
+
     try {
         const aiModel = document.getElementById('aiModelSelect').value;
-        
+
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -1296,12 +1409,12 @@ async function sendMessage() {
                 history: conversationHistory.slice(-10) // 最近10条对话历史
             })
         });
-        
+
         const result = await response.json();
-        
+
         // 移除加载状态
         removeMessage(loadingId);
-        
+
         if (result.code === 200) {
             appendMessage('assistant', result.data.reply);
             conversationHistory.push({ role: 'user', content: message });
@@ -1322,7 +1435,7 @@ async function sendMessage() {
 // 构建上下文（包含整个任务的所有域名数据）
 function buildContext() {
     if (!taskData || !taskData.domains || taskData.domains.length === 0) return '';
-    
+
     let context = `=== 资产测绘任务知识库 ===\n`;
     context += `任务ID: ${taskId}\n`;
     context += `任务状态: ${taskData.status}\n`;
@@ -1331,24 +1444,24 @@ function buildContext() {
         context += `当前聚焦域名: ${selectedDomain.domain}\n`;
     }
     context += '\n';
-    
+
     // 遍历所有域名
     taskData.domains.forEach(domain => {
         context += `========================================\n`;
         context += `【域名: ${domain.domain}】\n`;
         context += `========================================\n`;
         context += `状态: ${domain.status}\n`;
-        
+
         const subdomains = domain.discovery?.subdomains || [];
         const loginPages = extractLoginPages(domain.crawl?.visited_pages);
         const stats = domain.crawl?.statistics || {};
-        
+
         context += `子域名数: ${subdomains.length}\n`;
         context += `登录入口数: ${loginPages.length}\n`;
         context += `总发现URL: ${stats.total_discovered || 0}\n`;
         context += `已访问页面: ${stats.total_visited || 0}\n`;
         context += `失败数: ${stats.total_failed || 0}\n\n`;
-        
+
         if (subdomains.length > 0) {
             context += `子域名列表:\n`;
             subdomains.slice(0, 50).forEach(sub => {
@@ -1359,7 +1472,7 @@ function buildContext() {
             }
             context += '\n';
         }
-        
+
         if (loginPages.length > 0) {
             context += `登录入口:\n`;
             loginPages.forEach(page => {
@@ -1378,7 +1491,7 @@ function buildContext() {
             });
             context += '\n';
         }
-        
+
         // 访问的页面概要
         const visitedPages = domain.crawl?.visited_pages || [];
         if (visitedPages.length > 0) {
@@ -1393,7 +1506,7 @@ function buildContext() {
             context += '\n';
         }
     });
-    
+
     return context;
 }
 
@@ -1404,14 +1517,14 @@ let messageCounter = 0;
 function appendMessage(role, content, isLoading = false) {
     const chatMessages = document.getElementById('chatMessages');
     const messageId = 'msg-' + Date.now() + '-' + (++messageCounter);
-    
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `chatMessage ${role}`;
     if (isLoading) {
         messageDiv.className += ' loading';
     }
     messageDiv.id = messageId;
-    
+
     const avatar = role === 'assistant' ? `
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"></circle>
@@ -1423,7 +1536,7 @@ function appendMessage(role, content, isLoading = false) {
             <circle cx="12" cy="7" r="4"></circle>
         </svg>
     `;
-    
+
     let contentHtml;
     if (isLoading) {
         contentHtml = `
@@ -1437,22 +1550,22 @@ function appendMessage(role, content, isLoading = false) {
         // 将 Markdown 风格的文本转换为 HTML
         contentHtml = formatMessageContent(content);
     }
-    
+
     messageDiv.innerHTML = `
         <div class="messageAvatar">${avatar}</div>
         <div class="messageContent">${contentHtml}</div>
     `;
-    
+
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     return messageId;
 }
 
 // 格式化消息内容
 function formatMessageContent(content) {
     if (!content) return '';
-    
+
     // 简单的 Markdown 转换
     let html = content
         // 标题
@@ -1466,10 +1579,10 @@ function formatMessageContent(content) {
         // 换行
         .replace(/\n\n/g, '</p><p>')
         .replace(/\n/g, '<br>');
-    
+
     // 包装列表
     html = html.replace(/(<li>.*<\/li>)+/gs, match => `<ul>${match}</ul>`);
-    
+
     return `<p>${html}</p>`;
 }
 
@@ -1489,34 +1602,34 @@ function removeMessage(messageId) {
 function startPolling() {
     let consecutiveCompletedChecks = 0; // 连续检测到完成状态的次数
     const MAX_COMPLETED_CHECKS = 3; // 完成后额外检查次数（确保数据同步完成）
-    
+
     setInterval(async () => {
         if (!taskData) return;
-        
+
         // 任务正在运行中，正常同步
         if (taskData.status === 'running' || taskData.status === 'pending') {
             consecutiveCompletedChecks = 0; // 重置计数
             await syncTaskProgress(true);
             return;
         }
-        
+
         // 检查是否有域名状态不一致（域名还在运行但任务状态已完成）
         const hasPendingOrRunningDomains = taskData.domains?.some(d =>
             d.status === 'pending' || d.status === 'running' || d.status === 'discovering' || d.status === 'crawling'
         );
-        
+
         // 检查完成的域名数是否与总数一致
         const completedDomains = taskData.domains?.filter(d =>
             d.status === 'completed' || d.status === 'failed'
         ).length || 0;
         const isProgressIncomplete = completedDomains < taskData.totalDomains;
-        
+
         // 如果有域名还在运行或进度不完整，继续同步
         if (hasPendingOrRunningDomains || isProgressIncomplete) {
             await syncTaskProgress(true);
             return;
         }
-        
+
         // 任务刚完成时，额外同步几次确保数据完整
         if (taskData.status === 'completed' || taskData.status === 'failed' || taskData.status === 'stopped') {
             if (consecutiveCompletedChecks < MAX_COMPLETED_CHECKS) {
@@ -1549,7 +1662,7 @@ function initConfirmModal() {
     if (document.getElementById('confirmModal')) {
         return;
     }
-    
+
     // 创建确认对话框
     const modalHtml = `
         <div class="confirmModal" id="confirmModal">
@@ -1578,9 +1691,9 @@ function initConfirmModal() {
             </div>
         </div>
     `;
-    
+
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
+
     // 点击背景关闭
     document.getElementById('confirmModal').addEventListener('click', (e) => {
         if (e.target.id === 'confirmModal') {
@@ -1594,11 +1707,11 @@ function showConfirmModal(title, message, onConfirm, showCleanupOption = true) {
     const modal = document.getElementById('confirmModal');
     document.getElementById('confirmModalTitleText').textContent = title;
     document.getElementById('confirmModalMessage').textContent = message;
-    
+
     // 显示/隐藏清理选项
     const optionsDiv = modal.querySelector('.confirmModalOptions');
     optionsDiv.style.display = showCleanupOption ? 'block' : 'none';
-    
+
     // 绑定确认按钮
     const okBtn = document.getElementById('confirmModalOkBtn');
     okBtn.onclick = () => {
@@ -1606,7 +1719,7 @@ function showConfirmModal(title, message, onConfirm, showCleanupOption = true) {
         onConfirm(cleanupFiles);
         closeConfirmModal();
     };
-    
+
     modal.classList.add('show');
 }
 
@@ -1630,7 +1743,7 @@ function confirmDeleteTask() {
 // 删除任务
 async function deleteTask(cleanupFiles = true) {
     const deleteBtn = document.getElementById('deleteTaskBtn');
-    
+
     // 禁用按钮
     if (deleteBtn) {
         deleteBtn.disabled = true;
@@ -1641,14 +1754,14 @@ async function deleteTask(cleanupFiles = true) {
             删除中...
         `;
     }
-    
+
     try {
         const response = await fetch(`/api/tasks/${taskId}?cleanupFiles=${cleanupFiles}`, {
             method: 'DELETE'
         });
-        
+
         const result = await response.json();
-        
+
         if (result.code === 200) {
             if (typeof showMessage === 'function') {
                 showMessage('任务删除成功', 'success');
