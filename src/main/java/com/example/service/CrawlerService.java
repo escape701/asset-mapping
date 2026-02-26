@@ -145,9 +145,9 @@ public class CrawlerService {
             // 4. 创建任务级别的日志文件
             Path taskLogFile = taskOutputDir.resolve(LOG_FILE_NAME);
             logFilePaths.put(taskId, taskLogFile);
-            appendToTaskLog(taskLogFile, String.format("任务启动，共 %d 个域名，最大并发数: %d", 
-                domains.size(), maxConcurrent));
-            
+            appendToTaskLog(taskLogFile, String.format("任务启动，共 %d 个域名，最大并发数: %d",
+                    domains.size(), maxConcurrent));
+
             // 5. 并发执行每个域名的爬取
             log.info("========================================");
             log.info("开始并发爬取, 任务: {}", taskId);
@@ -205,12 +205,12 @@ public class CrawlerService {
                 // 统计完成和失败的域名数
                 List<TaskDomain> taskDomains = taskDomainRepository.findByTaskId(taskId);
                 long completedCount = taskDomains.stream()
-                    .filter(d -> TaskDomain.STATUS_COMPLETED.equals(d.getStatus()))
-                    .count();
+                        .filter(d -> TaskDomain.STATUS_COMPLETED.equals(d.getStatus()))
+                        .count();
                 long failedCount = taskDomains.stream()
-                    .filter(d -> TaskDomain.STATUS_FAILED.equals(d.getStatus()))
-                    .count();
-                
+                        .filter(d -> TaskDomain.STATUS_FAILED.equals(d.getStatus()))
+                        .count();
+
                 log.info("域名执行统计: 总数={}, 完成={}, 失败={}", domains.size(), completedCount, failedCount);
                 
                 updatedTask.setCompletedDomains((int) completedCount);
@@ -226,9 +226,9 @@ public class CrawlerService {
                 }
                 updatedTask.setPid(null);
                 taskRepository.save(updatedTask);
-                
-                appendToTaskLog(taskLogFile, String.format("任务完成，成功: %d, 失败: %d", 
-                    completedCount, failedCount));
+
+                appendToTaskLog(taskLogFile, String.format("任务完成，成功: %d, 失败: %d",
+                        completedCount, failedCount));
             }
             
             log.info("任务爬取完成, 任务: {}", taskId);
@@ -264,14 +264,14 @@ public class CrawlerService {
         
         // 获取或创建 TaskDomain 记录
         TaskDomain taskDomain = taskDomainRepository.findByTaskIdAndDomain(taskId, domain)
-            .orElseGet(() -> {
-                log.info("创建新的 TaskDomain 记录: {} - {}", taskId, domain);
-                TaskDomain td = new TaskDomain();
-                td.setTask(task);
-                td.setDomain(domain);
-                return taskDomainRepository.save(td);
-            });
-        
+                .orElseGet(() -> {
+                    log.info("创建新的 TaskDomain 记录: {} - {}", taskId, domain);
+                    TaskDomain td = new TaskDomain();
+                    td.setTask(task);
+                    td.setDomain(domain);
+                    return taskDomainRepository.save(td);
+                });
+
         try {
             // 1. 创建域名独立的输出目录
             Path domainOutputDir = taskOutputDir.resolve(sanitizeDomainForPath(domain));
@@ -295,8 +295,8 @@ public class CrawlerService {
             
             // 5. 启动 Python 进程（使用绝对路径确保跨工作目录访问）
             ProcessBuilder pb = new ProcessBuilder(
-                pythonPath, "-m", "login_crawler.combined_cli",
-                "-c", configFile.toAbsolutePath().toString()
+                    pythonPath, "-m", "login_crawler.combined_cli",
+                    "-c", configFile.toAbsolutePath().toString()
             );
             pb.directory(new File(crawlerProjectPath));
             pb.redirectErrorStream(true);
@@ -375,11 +375,11 @@ public class CrawlerService {
         
         // 替换配置项 - 使用绝对路径以确保跨进程工作目录访问
         String config = template
-            .replace("domains_file: input.txt", "domains_file: " + inputFile.toAbsolutePath().toString().replace("\\", "/"))
-            .replace("output_dir: out/combined", "output_dir: " + outputDir.toAbsolutePath().toString().replace("\\", "/"))
-            .replace("summary_output: out/combined/summary.json", 
-                     "summary_output: " + outputDir.resolve("summary.json").toAbsolutePath().toString().replace("\\", "/"));
-        
+                .replace("domains_file: input.txt", "domains_file: " + inputFile.toAbsolutePath().toString().replace("\\", "/"))
+                .replace("output_dir: out/combined", "output_dir: " + outputDir.toAbsolutePath().toString().replace("\\", "/"))
+                .replace("summary_output: out/combined/summary.json",
+                        "summary_output: " + outputDir.resolve("summary.json").toAbsolutePath().toString().replace("\\", "/"));
+
         // 写入配置文件
         Path configFile = outputDir.resolve("config.yaml");
         Files.writeString(configFile, config);
@@ -390,28 +390,28 @@ public class CrawlerService {
     /**
      * 读取域名进程输出
      */
-    private void readDomainProcessOutput(String taskId, String domain, Process process, 
-                                          Path outputDir, Path taskLogFile) {
+    private void readDomainProcessOutput(String taskId, String domain, Process process,
+                                         Path outputDir, Path taskLogFile) {
         new Thread(() -> {
             Path logFile = outputDir.resolve(LOG_FILE_NAME);
             
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
                  BufferedWriter writer = new BufferedWriter(
-                    new OutputStreamWriter(new FileOutputStream(logFile.toFile(), false), StandardCharsets.UTF_8))) {
-                
+                         new OutputStreamWriter(new FileOutputStream(logFile.toFile(), false), StandardCharsets.UTF_8))) {
+
                 // 写入日志头
-                String header = String.format("[%s] 爬虫启动: %s%n", 
-                    LocalDateTime.now().format(LOG_TIME_FORMAT), domain);
+                String header = String.format("[%s] 爬虫启动: %s%n",
+                        LocalDateTime.now().format(LOG_TIME_FORMAT), domain);
                 writer.write(header);
                 writer.flush();
                 
                 String line;
                 while ((line = reader.readLine()) != null) {
                     log.debug("[{}][{}] {}", taskId, domain, line);
-                    
-                    String logLine = String.format("[%s] %s%n", 
-                        LocalDateTime.now().format(LOG_TIME_FORMAT), line);
+
+                    String logLine = String.format("[%s] %s%n",
+                            LocalDateTime.now().format(LOG_TIME_FORMAT), line);
                     writer.write(logLine);
                     writer.flush();
                     
@@ -420,8 +420,8 @@ public class CrawlerService {
                 }
                 
                 // 写入日志尾
-                String footer = String.format("[%s] 爬虫进程结束%n", 
-                    LocalDateTime.now().format(LOG_TIME_FORMAT));
+                String footer = String.format("[%s] 爬虫进程结束%n",
+                        LocalDateTime.now().format(LOG_TIME_FORMAT));
                 writer.write(footer);
                 writer.flush();
                 
@@ -495,8 +495,8 @@ public class CrawlerService {
      */
     private void appendToTaskLog(Path logFile, String message) {
         try {
-            String logLine = String.format("[%s] %s%n", 
-                LocalDateTime.now().format(LOG_TIME_FORMAT), message);
+            String logLine = String.format("[%s] %s%n",
+                    LocalDateTime.now().format(LOG_TIME_FORMAT), message);
             Files.writeString(logFile, logLine, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             log.error("写入任务日志失败: {}", logFile, e);
@@ -509,10 +509,10 @@ public class CrawlerService {
     private String sanitizeDomainForPath(String domain) {
         // 移除协议前缀，将特殊字符替换为下划线
         return domain
-            .replaceAll("^https?://", "")
-            .replaceAll("[^a-zA-Z0-9.-]", "_")
-            .replaceAll("_+", "_")
-            .replaceAll("^_|_$", "");
+                .replaceAll("^https?://", "")
+                .replaceAll("[^a-zA-Z0-9.-]", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_|_$", "");
     }
     
     /**
@@ -540,7 +540,7 @@ public class CrawlerService {
             
             // 更新域名状态
             if (TaskDomain.STATUS_DISCOVERING.equals(taskDomain.getStatus()) ||
-                TaskDomain.STATUS_CRAWLING.equals(taskDomain.getStatus())) {
+                    TaskDomain.STATUS_CRAWLING.equals(taskDomain.getStatus())) {
                 taskDomain.setStatus(TaskDomain.STATUS_FAILED);
                 taskDomain.setFinishedAt(LocalDateTime.now());
                 taskDomainRepository.save(taskDomain);
@@ -602,7 +602,7 @@ public class CrawlerService {
         Task task = taskRepository.findById(taskId).orElse(null);
         if (task != null && task.getOutputDir() != null) {
             // 目录结构: {outputDir}/{domain}/{domain}/discovery.json
-            Path filePath = Paths.get(task.getOutputDir(), safeDomain, safeDomain, "discovery.json");
+            Path filePath = Paths.get(task.getOutputDir(), safeDomain, "discovery.json");
             if (filePath.toFile().exists()) {
                 Map<String, Object> result = readJsonFile(filePath);
                 log.debug("读取 discovery 成功: {}, 数据量: {}", filePath, result.size());
@@ -611,7 +611,7 @@ public class CrawlerService {
         }
         
         // 回退到任务基础目录
-        Path taskBaseFile = Paths.get(taskOutputBasePath, taskId, safeDomain, safeDomain, "discovery.json");
+        Path taskBaseFile = Paths.get(taskOutputBasePath, taskId, safeDomain, "discovery.json");
         if (taskBaseFile.toFile().exists()) {
             Map<String, Object> result = readJsonFile(taskBaseFile);
             log.debug("从任务基础目录读取 discovery: {}", taskBaseFile);
@@ -634,7 +634,7 @@ public class CrawlerService {
         Task task = taskRepository.findById(taskId).orElse(null);
         if (task != null && task.getOutputDir() != null) {
             // 目录结构: {outputDir}/{domain}/{domain}/crawl.json
-            Path filePath = Paths.get(task.getOutputDir(), safeDomain, safeDomain, "crawl.json");
+            Path filePath = Paths.get(task.getOutputDir(), safeDomain, "crawl.json");
             if (filePath.toFile().exists()) {
                 Map<String, Object> result = readJsonFile(filePath);
                 log.debug("读取 crawl 成功: {}, 数据量: {}", filePath, result.size());
@@ -643,7 +643,7 @@ public class CrawlerService {
         }
         
         // 回退到任务基础目录
-        Path taskBaseFile = Paths.get(taskOutputBasePath, taskId, safeDomain, safeDomain, "crawl.json");
+        Path taskBaseFile = Paths.get(taskOutputBasePath, taskId, safeDomain, "crawl.json");
         if (taskBaseFile.toFile().exists()) {
             Map<String, Object> result = readJsonFile(taskBaseFile);
             log.debug("从任务基础目录读取 crawl: {}", taskBaseFile);
@@ -802,27 +802,27 @@ public class CrawlerService {
                 Path taskOutputPath = Paths.get(taskOutputBasePath);
                 if (Files.exists(taskOutputPath)) {
                     // 注册根目录（用于监控新任务目录的创建）
-                    WatchKey rootKey = taskOutputPath.register(watchService, 
-                        StandardWatchEventKinds.ENTRY_CREATE,
-                        StandardWatchEventKinds.ENTRY_MODIFY);
+                    WatchKey rootKey = taskOutputPath.register(watchService,
+                            StandardWatchEventKinds.ENTRY_CREATE,
+                            StandardWatchEventKinds.ENTRY_MODIFY);
                     watchKeyPathMap.put(rootKey, taskOutputPath);
                     log.info("文件监控已启动: {}", taskOutputBasePath);
                     
                     // 注册已存在的任务子目录
                     try {
                         Files.list(taskOutputPath)
-                            .filter(Files::isDirectory)
-                            .forEach(dir -> {
-                                try {
-                                    WatchKey key = dir.register(watchService,
-                                        StandardWatchEventKinds.ENTRY_CREATE,
-                                        StandardWatchEventKinds.ENTRY_MODIFY);
-                                    watchKeyPathMap.put(key, dir);
-                                    log.debug("监控任务目录: {}", dir);
-                                } catch (IOException e) {
-                                    log.warn("无法监控目录: {}", dir, e);
-                                }
-                            });
+                                .filter(Files::isDirectory)
+                                .forEach(dir -> {
+                                    try {
+                                        WatchKey key = dir.register(watchService,
+                                                StandardWatchEventKinds.ENTRY_CREATE,
+                                                StandardWatchEventKinds.ENTRY_MODIFY);
+                                        watchKeyPathMap.put(key, dir);
+                                        log.debug("监控任务目录: {}", dir);
+                                    } catch (IOException e) {
+                                        log.warn("无法监控目录: {}", dir, e);
+                                    }
+                                });
                     } catch (IOException e) {
                         log.warn("无法列出任务目录", e);
                     }
@@ -850,12 +850,12 @@ public class CrawlerService {
                         Path fullPath = watchedDir.resolve(changed);
                         
                         // 如果是新创建的目录（可能是新任务或域名），注册监控
-                        if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE 
-                            && Files.isDirectory(fullPath)) {
+                        if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE
+                                && Files.isDirectory(fullPath)) {
                             try {
                                 WatchKey newKey = fullPath.register(watchService,
-                                    StandardWatchEventKinds.ENTRY_CREATE,
-                                    StandardWatchEventKinds.ENTRY_MODIFY);
+                                        StandardWatchEventKinds.ENTRY_CREATE,
+                                        StandardWatchEventKinds.ENTRY_MODIFY);
                                 watchKeyPathMap.put(newKey, fullPath);
                                 log.debug("新增监控目录: {}", fullPath);
                             } catch (IOException e) {
@@ -1041,7 +1041,7 @@ public class CrawlerService {
     @SuppressWarnings("unchecked")
     private void updateDomainFromSummary(String taskId, String domain, Map<String, Object> result) {
         TaskDomain taskDomain = taskDomainRepository.findByTaskIdAndDomain(taskId, domain)
-            .orElse(null);
+                .orElse(null);
         if (taskDomain == null) return;
         
         // 更新 landing URL
@@ -1165,14 +1165,14 @@ public class CrawlerService {
         }
         
         Files.walk(dir)
-            .sorted(Comparator.reverseOrder())
-            .forEach(path -> {
-                try {
-                    Files.delete(path);
-                } catch (IOException e) {
-                    log.warn("删除文件失败: {}", path, e);
-                }
-            });
+                .sorted(Comparator.reverseOrder())
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        log.warn("删除文件失败: {}", path, e);
+                    }
+                });
     }
     
     /**
@@ -1188,9 +1188,9 @@ public class CrawlerService {
         
         // 检查是否有域名进程仍在运行
         boolean processRunning = domainProcesses.entrySet().stream()
-            .filter(e -> e.getKey().startsWith(taskId + "_"))
-            .anyMatch(e -> e.getValue().isAlive());
-        
+                .filter(e -> e.getKey().startsWith(taskId + "_"))
+                .anyMatch(e -> e.getValue().isAlive());
+
         int completedCount = 0;
         int failedCount = 0;
         int runningCount = 0;
@@ -1200,9 +1200,9 @@ public class CrawlerService {
             String currentStatus = taskDomain.getStatus();
             
             // 重要：如果域名已经是终态（completed 或 failed），不要覆盖状态
-            boolean isTerminalState = TaskDomain.STATUS_COMPLETED.equals(currentStatus) 
-                                   || TaskDomain.STATUS_FAILED.equals(currentStatus);
-            
+            boolean isTerminalState = TaskDomain.STATUS_COMPLETED.equals(currentStatus)
+                    || TaskDomain.STATUS_FAILED.equals(currentStatus);
+
             try {
                 // 读取 discovery 结果
                 Map<String, Object> discovery = readDiscoveryResult(taskId, domain);
@@ -1301,7 +1301,7 @@ public class CrawlerService {
                 completedCount++;
             } else if (TaskDomain.STATUS_FAILED.equals(finalStatus)) {
                 failedCount++;
-            } else if (TaskDomain.STATUS_CRAWLING.equals(finalStatus) 
+            } else if (TaskDomain.STATUS_CRAWLING.equals(finalStatus)
                     || TaskDomain.STATUS_DISCOVERING.equals(finalStatus)) {
                 runningCount++;
             }
@@ -1326,10 +1326,10 @@ public class CrawlerService {
         // 判断任务是否完成：所有域名都达到终态且进程不再运行
         boolean allDomainsFinished = (completedCount + failedCount) >= task.getTotalDomains();
         boolean noRunningDomains = runningCount == 0;
-        
-        log.info("任务完成判断: taskId={}, 完成={}, 失败={}, 运行中={}, 总数={}, 进程运行={}", 
-            taskId, completedCount, failedCount, runningCount, task.getTotalDomains(), processRunning);
-        
+
+        log.info("任务完成判断: taskId={}, 完成={}, 失败={}, 运行中={}, 总数={}, 进程运行={}",
+                taskId, completedCount, failedCount, runningCount, task.getTotalDomains(), processRunning);
+
         // 只有当所有域名完成且进程不再运行时才标记任务完成
         if (allDomainsFinished && !processRunning && noRunningDomains) {
             if (completedCount == 0 && failedCount > 0) {
@@ -1355,8 +1355,8 @@ public class CrawlerService {
         }
         
         taskRepository.save(task);
-        
-        log.info("任务进度同步完成: {}, 状态: {}, 完成 {}/{}, 失败 {}, 运行中 {}, 进程运行: {}", 
-            taskId, task.getStatus(), completedCount, task.getTotalDomains(), failedCount, runningCount, processRunning);
+
+        log.info("任务进度同步完成: {}, 状态: {}, 完成 {}/{}, 失败 {}, 运行中 {}, 进程运行: {}",
+                taskId, task.getStatus(), completedCount, task.getTotalDomains(), failedCount, runningCount, processRunning);
     }
 }

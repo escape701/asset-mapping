@@ -7,6 +7,7 @@ let conversationHistory = [];
 let logPollingInterval = null;
 let lastLogLine = 0;
 let autoScrollLogs = true;
+let confidenceFilter = 'all';
 
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     taskId = pathParts[pathParts.length - 1];
     
     document.getElementById('taskTitle').textContent = `任务 ${taskId}`;
-    
+
     initTabs();
     initChat();
     initConfirmModal();
@@ -217,7 +218,7 @@ async function syncTaskProgress(silent = false) {
             }
             
             // 如果任务状态从运行中变为完成，执行完成时的清理操作
-            if ((oldStatus === 'running' || oldStatus === 'pending') && 
+            if ((oldStatus === 'running' || oldStatus === 'pending') &&
                 (taskData.status === 'completed' || taskData.status === 'failed' || taskData.status === 'stopped')) {
                 handleTaskCompletion();
             }
@@ -359,6 +360,19 @@ function getLlmVerification(page) {
     return null;
 }
 
+// 判定登录页面的置信度等级: HIGH / MEDIUM / LOW
+function getConfidenceLevel(page) {
+    const val = (page.is_login_page || '').toString().toUpperCase();
+    const isVerified = val.includes('VERIFIED');
+    if (isVerified) {
+        const llm = getLlmVerification(page);
+        const authTypes = llm?.auth_types || [];
+        const allUnknown = authTypes.length === 0 || authTypes.every(t => t.toUpperCase() === 'UNKNOWN');
+        return allUnknown ? 'MEDIUM' : 'HIGH';
+    }
+    return 'LOW';
+}
+
 // 解析 is_login_page 值，分离核心判定和附加信息
 function parseLoginPageStatus(value) {
     if (!value) return { status: '', detail: '' };
@@ -405,9 +419,13 @@ function getScreenshotUrl(screenshotPath) {
     
     // 将 Python 输出的路径转换为后端 API URL
     // Python 输出格式: "screenshots\\xxx.png" 或 "screenshots/xxx.png"
-    // 后端 API: /api/screenshots/file?path=screenshots/xxx.png
+    // 后端 API: /api/screenshots/file?path=screenshots/xxx.png&taskId=xxx
     const encodedPath = encodeURIComponent(screenshotPath);
-    return `/api/screenshots/file?path=${encodedPath}`;
+    let url = `/api/screenshots/file?path=${encodedPath}`;
+    if (taskId) {
+        url += `&taskId=${encodeURIComponent(taskId)}`;
+    }
+    return url;
 }
 
 // 渲染任务概览
@@ -435,8 +453,8 @@ function renderTaskOverview() {
     statusEl.textContent = statusText;
     
     // 进度
-    const progress = taskData.totalDomains > 0 
-        ? Math.round((taskData.completedDomains / taskData.totalDomains) * 100) 
+    const progress = taskData.totalDomains > 0
+        ? Math.round((taskData.completedDomains / taskData.totalDomains) * 100)
         : 0;
     document.getElementById('progressFill').style.width = `${progress}%`;
     document.getElementById('progressText').textContent = `${progress}%`;
@@ -696,8 +714,18 @@ function renderResults() {
             
         case 'logins':
             // 从 visited_pages 中提取登录页面
-            const loginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
-            // 存储到全局变量供点击使用
+            const allLoginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
+
+            // 统计各置信度数量
+            const confidenceCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+            allLoginPages.forEach(p => confidenceCounts[getConfidenceLevel(p)]++);
+
+            // 按当前过滤器筛选
+            const loginPages = confidenceFilter === 'all'
+                ? allLoginPages
+                : allLoginPages.filter(p => getConfidenceLevel(p) === confidenceFilter);
+
+            // 存储到全局变量供点击使用（用过滤后的列表）
             window.currentLoginPages = loginPages;
             
             // 获取 crawl 元数据
@@ -717,21 +745,43 @@ function renderResults() {
                         <div class="statsRow">
                             <span class="statItem"><strong>总发现:</strong> ${crawlStats.total_discovered || 0} URL</span>
                             <span class="statItem"><strong>已访问:</strong> ${crawlStats.total_visited || 0}</span>
-                            <span class="statItem"><strong>登录页:</strong> ${loginPages.length}</span>
+                            <span class="statItem"><strong>登录页:</strong> ${allLoginPages.length}</span>
                             ${crawlStats.total_failed > 0 ? `<span class="statItem statFailed"><strong>失败:</strong> ${crawlStats.total_failed}</span>` : ''}
                         </div>
                     </div>
                 `;
             }
-            
-            resultContent.innerHTML = loginHeader + (loginPages.length > 0 ? `
+
+            // 置信度过滤器栏
+            const confidenceFilterBar = `
+                <div class="confidenceFilterBar">
+                    <span class="confidenceFilterLabel">置信度:</span>
+                    <button class="confidenceFilterBtn ${confidenceFilter === 'all' ? 'active' : ''}" data-level="all">
+                        全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
+                    </button>
+                    <button class="confidenceFilterBtn cfHigh ${confidenceFilter === 'HIGH' ? 'active' : ''}" data-level="HIGH">
+                        高 <span class="confidenceFilterCount">${confidenceCounts.HIGH}</span>
+                    </button>
+                    <button class="confidenceFilterBtn cfMedium ${confidenceFilter === 'MEDIUM' ? 'active' : ''}" data-level="MEDIUM">
+                        中 <span class="confidenceFilterCount">${confidenceCounts.MEDIUM}</span>
+                    </button>
+                    <button class="confidenceFilterBtn cfLow ${confidenceFilter === 'LOW' ? 'active' : ''}" data-level="LOW">
+                        低 <span class="confidenceFilterCount">${confidenceCounts.LOW}</span>
+                    </button>
+                </div>
+            `;
+
+            resultContent.innerHTML = loginHeader + confidenceFilterBar + (loginPages.length > 0 ? `
                 <div class="loginCardGrid">
                     ${loginPages.map((page, index) => {
-                        const screenshotUrl = getScreenshotUrl(page.screenshot_path);
-                        const hasPopups = page.popup_login_screenshot_path && page.popup_login_screenshot_path.length > 0;
-                        return `
+                const screenshotUrl = getScreenshotUrl(page.screenshot_path);
+                const hasPopups = page.popup_login_screenshot_path && page.popup_login_screenshot_path.length > 0;
+                const confidence = getConfidenceLevel(page);
+                const confidenceLabel = { HIGH: '高', MEDIUM: '中', LOW: '低' }[confidence];
+                return `
                         <div class="loginCard" onclick="openLoginScreenshot(${index})">
                             <div class="loginCardScreenshot">
+                                <span class="confidenceBadge cf${confidence}">${confidenceLabel}</span>
                                 ${screenshotUrl ? `
                                     <img src="${screenshotUrl}" alt="${page.title || '登录页面'}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
                                     <div class="screenshotPlaceholder" style="display:none;">
@@ -761,36 +811,36 @@ function renderResults() {
                                 <div class="loginCardUrl">${page.url}</div>
                                 <div class="loginCardTags">
                                     ${(() => {
-                                        const parsed = parseLoginPageStatus(page.is_login_page);
-                                        const verified = parsed.detail && parsed.detail.toUpperCase().startsWith('VERIFIED');
-                                        return `<span class="loginCardTag auth">${verified ? '已验证' : '登录页'}</span>`;
-                                    })()}
+                    const parsed = parseLoginPageStatus(page.is_login_page);
+                    const verified = parsed.detail && parsed.detail.toUpperCase().startsWith('VERIFIED');
+                    return `<span class="loginCardTag auth">${verified ? '已验证' : '登录页'}</span>`;
+                })()}
                                     ${hasPopups ? `<span class="loginCardTag popup">+${page.popup_login_screenshot_path.length}弹窗</span>` : ''}
                                     <span class="loginCardTag">${page.status_code}</span>
                                     <span class="loginCardTag depth">深度${page.depth || 0}</span>
                                     ${(() => {
-                                        const det = page.login_detection || {};
-                                        const scope = det.scope || '';
-                                        if (scope === 'external_one_hop') return '<span class="loginCardTag scope">外部跳转</span>';
-                                        if (scope && scope !== 'in_scope') return `<span class="loginCardTag scope">${scope}</span>`;
-                                        return '';
-                                    })()}
+                    const det = page.login_detection || {};
+                    const scope = det.scope || '';
+                    if (scope === 'external_one_hop') return '<span class="loginCardTag scope">外部跳转</span>';
+                    if (scope && scope !== 'in_scope') return `<span class="loginCardTag scope">${scope}</span>`;
+                    return '';
+                })()}
                                     ${(() => {
-                                        const llm = getLlmVerification(page);
-                                        if (!llm) return '';
-                                        let tags = '';
-                                        if (llm.auth_types && llm.auth_types.length > 0) {
-                                            tags += llm.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('');
-                                        }
-                                        if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA' && llm.mfa_confirmation !== 'UNKNOWN') {
-                                            tags += '<span class="loginCardTag mfa">MFA</span>';
-                                        }
-                                        return tags;
-                                    })()}
+                    const llm = getLlmVerification(page);
+                    if (!llm) return '';
+                    let tags = '';
+                    if (llm.auth_types && llm.auth_types.length > 0) {
+                        tags += llm.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('');
+                    }
+                    if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA' && llm.mfa_confirmation !== 'UNKNOWN') {
+                        tags += '<span class="loginCardTag mfa">MFA</span>';
+                    }
+                    return tags;
+                })()}
                                     ${(() => {
-                                        const signals = (page.login_detection || {}).signals || [];
-                                        return signals.map(s => `<span class="loginCardTag signal">${s.replace(/_/g, ' ')}</span>`).join('');
-                                    })()}
+                    const signals = (page.login_detection || {}).signals || [];
+                    return signals.map(s => `<span class="loginCardTag signal">${s.replace(/_/g, ' ')}</span>`).join('');
+                })()}
                                 </div>
                                 <div class="loginCardDesc">${formatLoginDesc(page)}</div>
                                 ${page.login_detection && page.login_detection.referrer ? `<div class="loginCardReferrer">来源: ${page.login_detection.referrer}</div>` : ''}
@@ -800,7 +850,16 @@ function renderResults() {
                         </div>
                     `}).join('')}
                 </div>
-            ` : '<div class="resultEmpty"><p>暂无发现的登录入口</p></div>');
+            ` : `<div class="resultEmpty"><p>${confidenceFilter !== 'all' ? '当前过滤条件下暂无登录入口' : '暂无发现的登录入口'}</p></div>`);
+
+            // 绑定过滤器按钮事件
+            resultContent.querySelectorAll('.confidenceFilterBtn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    confidenceFilter = btn.dataset.level;
+                    renderResults();
+                });
+            });
             break;
             
         case 'assets':
@@ -1442,12 +1501,12 @@ function startPolling() {
         }
         
         // 检查是否有域名状态不一致（域名还在运行但任务状态已完成）
-        const hasPendingOrRunningDomains = taskData.domains?.some(d => 
+        const hasPendingOrRunningDomains = taskData.domains?.some(d =>
             d.status === 'pending' || d.status === 'running' || d.status === 'discovering' || d.status === 'crawling'
         );
         
         // 检查完成的域名数是否与总数一致
-        const completedDomains = taskData.domains?.filter(d => 
+        const completedDomains = taskData.domains?.filter(d =>
             d.status === 'completed' || d.status === 'failed'
         ).length || 0;
         const isProgressIncomplete = completedDomains < taskData.totalDomains;

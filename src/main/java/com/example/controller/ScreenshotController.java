@@ -11,7 +11,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
-import java.nio.file.Paths;
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 截图文件服务控制器
@@ -37,21 +41,26 @@ public class ScreenshotController {
     
     /**
      * 根据完整路径获取截图（用于 crawl.json 中的 screenshot_path）
-     * URL: /api/screenshots/file?path=xxx
-     * 
+     * URL: /api/screenshots/file?path=xxx&taskId=yyy
+     *
      * 新版 Python 输出格式示例（绝对路径）:
      * - screenshot_path: "D:/ysha/newwork/crawler-output/{taskId}/{domain}/screenshots/xxx.png"
      * - popup_login_screenshot_path: ["D:/ysha/newwork/crawler-output/{taskId}/{domain}/screenshots/xxx_login_popup.png"]
-     * 
+     *
+     * crawl.json 可能存储相对路径如 "out/combined/census.gov/screenshots/xxx.png"，
+     * 此时通过 taskId 参数在 {task-output-base}/{taskId}/ 下按文件名查找。
+     *
      * 旧版兼容:
      * - screenshot_path: "screenshots\\www.baidu.com__20260203_181405.png"
      */
     @GetMapping("/file")
-    public ResponseEntity<Resource> getScreenshotByPath(@RequestParam String path) {
+    public ResponseEntity<Resource> getScreenshotByPath(
+            @RequestParam String path,
+            @RequestParam(required = false) String taskId) {
         try {
             // 安全检查
-            if (path.contains("..")) {
-                log.warn("检测到路径遍历尝试: {}", path);
+            if (path.contains("..") || (taskId != null && taskId.contains(".."))) {
+                log.warn("检测到路径遍历尝试: path={}, taskId={}", path, taskId);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
             
@@ -84,9 +93,23 @@ public class ScreenshotController {
                 String filename = Paths.get(normalizedPath).getFileName().toString();
                 file = Paths.get(screenshotBaseDir, filename).toFile();
             }
-            
+
+            // 5. 如果提供了 taskId，在 {task-output-base}/{taskId}/ 下按文件名查找
+            //    适用于 crawl.json 存储了不匹配的相对路径（如 out/combined/domain/screenshots/xxx.png）
+            if (!file.exists() && taskId != null && !taskId.isBlank()) {
+                String filename = Paths.get(normalizedPath).getFileName().toString();
+                Path taskDir = Paths.get(taskOutputBasePath, taskId);
+                if (Files.isDirectory(taskDir)) {
+                    File found = findFileByName(taskDir, filename);
+                    if (found != null) {
+                        file = found;
+                        log.debug("通过 taskId 查找找到截图: taskId={}, file={}", taskId, file.getAbsolutePath());
+                    }
+                }
+            }
+
             if (!file.exists() || !file.isFile()) {
-                log.debug("截图文件不存在: path={}, tried={}", path, file.getAbsolutePath());
+                log.debug("截图文件不存在: path={}, taskId={}, tried={}", path, taskId, file.getAbsolutePath());
                 return ResponseEntity.notFound().build();
             }
             
@@ -95,10 +118,10 @@ public class ScreenshotController {
             String allowedDir1 = new File(crawlerProjectPath).getCanonicalPath();
             String allowedDir2 = new File(screenshotBaseDir).getCanonicalPath();
             String allowedDir3 = new File(taskOutputBasePath).getCanonicalPath();
-            
-            if (!canonicalPath.startsWith(allowedDir1) && 
-                !canonicalPath.startsWith(allowedDir2) && 
-                !canonicalPath.startsWith(allowedDir3)) {
+
+            if (!canonicalPath.startsWith(allowedDir1) &&
+                    !canonicalPath.startsWith(allowedDir2) &&
+                    !canonicalPath.startsWith(allowedDir3)) {
                 log.warn("文件路径越界: {} not in allowed directories", canonicalPath);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
@@ -106,9 +129,42 @@ public class ScreenshotController {
             return serveImageFile(file);
                 
         } catch (Exception e) {
-            log.error("获取截图失败: path={}", path, e);
+            log.error("获取截图失败: path={}, taskId={}", path, taskId, e);
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    /**
+     * 在目录树中按文件名查找（只搜索 screenshots 子目录以缩小范围）
+     */
+    private File findFileByName(Path rootDir, String targetFilename) {
+        List<File> results = new ArrayList<>();
+        try {
+            Files.walkFileTree(rootDir, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (!results.isEmpty()) return FileVisitResult.TERMINATE;
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (file.getFileName().toString().equals(targetFilename)) {
+                        results.add(file.toFile());
+                        return FileVisitResult.TERMINATE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            log.debug("查找文件失败: dir={}, filename={}", rootDir, targetFilename, e);
+        }
+        return results.isEmpty() ? null : results.get(0);
     }
     
     /**
@@ -129,9 +185,9 @@ public class ScreenshotController {
         Resource resource = new FileSystemResource(file);
         
         return ResponseEntity.ok()
-            .contentType(mediaType)
-            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getName() + "\"")
-            .header(HttpHeaders.CACHE_CONTROL, "max-age=3600") // 缓存1小时
-            .body(resource);
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getName() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "max-age=3600") // 缓存1小时
+                .body(resource);
     }
 }
