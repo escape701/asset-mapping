@@ -12,6 +12,18 @@ let authTypeFilter = 'all';
 let mfaFilter = 'all';
 let easyBreachFilter = false;
 
+const PAGE_SIZE = 80;
+let tabRenderState = {};
+
+function resetTabRenderState() {
+    tabRenderState = {
+        subdomains: { rendered: 0, dataKey: null },
+        logins:     { rendered: 0, dataKey: null },
+        assets:     { rendered: 0, dataKey: null },
+    };
+}
+resetTabRenderState();
+
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', () => {
     // 从URL获取任务ID
@@ -206,6 +218,7 @@ async function syncTaskProgress(silent = false) {
             // 如果域名完成数有变化，强制刷新以显示最新数据
             if (currentTab !== 'logs' || domainsChanged) {
                 if (currentTab !== 'logs') {
+                    resetTabRenderState();
                     renderResults();
                 }
             }
@@ -567,8 +580,7 @@ function renderDomainList() {
             domainItems.forEach(i => i.classList.remove('active'));
             item.classList.add('active');
             selectedDomain = taskData.domains[parseInt(item.dataset.index)];
-            // 日志是任务级别的，切换域名只需更新非日志内容
-            // 无论当前标签页是什么都可以渲染，只是日志标签页不会因此改变
+            resetTabRenderState();
             renderResults();
         });
     });
@@ -655,9 +667,210 @@ function formatTime(isoString) {
     }
 }
 
-// 渲染结果
+// 生成"加载更多"提示条 HTML
+function loadMoreHtml(shown, total) {
+    if (shown >= total) return '';
+    return `<div class="loadMoreSentinel" data-action="loadMore">
+        <span>已显示 ${shown} / ${total} 条，滚动加载更多</span>
+    </div>`;
+}
+
+// 为 resultContent 绑定滚动懒加载（只绑定一次）
+let _scrollBound = false;
+function ensureScrollLoadMore() {
+    const rc = document.getElementById('resultContent');
+    if (!rc || _scrollBound) return;
+    _scrollBound = true;
+    rc.addEventListener('scroll', () => {
+        if (rc.scrollTop + rc.clientHeight >= rc.scrollHeight - 120) {
+            appendNextPage();
+        }
+    });
+}
+
+// 追加下一页数据到当前页签
+function appendNextPage() {
+    const state = tabRenderState[currentTab];
+    if (!state || !state.allItems || state.rendered >= state.allItems.length) return;
+
+    const start = state.rendered;
+    const end = Math.min(start + PAGE_SIZE, state.allItems.length);
+    const slice = state.allItems.slice(start, end);
+    state.rendered = end;
+
+    const container = document.getElementById('resultContent');
+    if (!container) return;
+
+    const sentinel = container.querySelector('.loadMoreSentinel');
+
+    if (currentTab === 'subdomains') {
+        const ul = container.querySelector('.resultList');
+        if (ul) ul.insertAdjacentHTML('beforeend', slice.map(renderSubdomainItem).join(''));
+    } else if (currentTab === 'logins') {
+        const grid = container.querySelector('.loginCardGrid');
+        if (grid) grid.insertAdjacentHTML('beforeend', slice.map((page, i) => renderLoginCard(page, start + i)).join(''));
+    } else if (currentTab === 'assets') {
+        const ul = container.querySelector('#assetVisitedList');
+        if (ul) ul.insertAdjacentHTML('beforeend', slice.map(renderAssetVisitedItem).join(''));
+    }
+
+    if (sentinel) {
+        if (state.rendered >= state.allItems.length) {
+            sentinel.remove();
+        } else {
+            sentinel.querySelector('span').textContent =
+                `已显示 ${state.rendered} / ${state.allItems.length} 条，滚动加载更多`;
+        }
+    }
+}
+
+// ---- 单条渲染模板 ----
+
+function renderSubdomainItem(subdomain) {
+    return `<li class="subdomainItem">
+        <div class="subdomainIcon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+        </div>
+        <div class="subdomainContent"><div class="subdomainUrl">${subdomain}</div></div>
+        <a href="https://${subdomain}" target="_blank" class="subdomainLink" onclick="event.stopPropagation()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+        </a>
+    </li>`;
+}
+
+function renderLoginCard(page, index) {
+    const screenshotUrl = getScreenshotUrl(page.screenshot_path);
+    const hasPopups = page.popup_login_screenshot_path && page.popup_login_screenshot_path.length > 0;
+    const confidence = getConfidenceLevel(page);
+    const confidenceLabel = { HIGH: '高', MEDIUM: '中', LOW: '低' }[confidence];
+    const parsed = parseLoginPageStatus(page.is_login_page);
+    const verified = parsed.detail && parsed.detail.toUpperCase().startsWith('VERIFIED');
+    const det = page.login_detection || {};
+    const scope = det.scope || '';
+    const llm = getLlmVerification(page);
+    const signals = det.signals || [];
+
+    let scopeTag = '';
+    if (scope === 'external_one_hop') scopeTag = '<span class="loginCardTag scope">外部跳转</span>';
+    else if (scope && scope !== 'in_scope') scopeTag = `<span class="loginCardTag scope">${scope}</span>`;
+
+    let llmTags = '';
+    if (llm) {
+        if (llm.auth_types && llm.auth_types.length > 0)
+            llmTags += llm.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('');
+        if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA' && llm.mfa_confirmation !== 'UNKNOWN')
+            llmTags += '<span class="loginCardTag mfa">MFA</span>';
+    }
+
+    return `<div class="loginCard" onclick="openLoginScreenshot(${index})">
+        <div class="loginCardScreenshot">
+            <span class="confidenceBadge cf${confidence}">${confidenceLabel}</span>
+            ${screenshotUrl ? `
+                <img src="${screenshotUrl}" alt="${page.title || '登录页面'}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                <div class="screenshotPlaceholder" style="display:none;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg><span>加载失败</span>
+                </div>
+                <div class="viewOverlay"><span>点击查看大图</span></div>
+            ` : `
+                <div class="screenshotPlaceholder">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg><span>暂无截图</span>
+                </div>
+            `}
+        </div>
+        <div class="loginCardBody">
+            <div class="loginCardTitle">${page.title || '登录页面'}</div>
+            <div class="loginCardUrl">${page.url}</div>
+            <div class="loginCardTags">
+                <span class="loginCardTag auth">${verified ? '已验证' : '登录页'}</span>
+                ${hasPopups ? `<span class="loginCardTag popup">+${page.popup_login_screenshot_path.length}弹窗</span>` : ''}
+                <span class="loginCardTag">${page.status_code}</span>
+                <span class="loginCardTag depth">深度${page.depth || 0}</span>
+                ${scopeTag}${llmTags}
+                ${signals.map(s => `<span class="loginCardTag signal">${s.replace(/_/g, ' ')}</span>`).join('')}
+            </div>
+            <div class="loginCardDesc">${formatLoginDesc(page)}</div>
+            ${det.referrer ? `<div class="loginCardReferrer">来源: ${det.referrer}</div>` : ''}
+            ${page.login_detection_error ? `<div class="loginCardError">${page.login_detection_error}</div>` : ''}
+            ${page.discovered_at ? `<div class="loginCardTime">发现于 ${formatTime(page.discovered_at)}</div>` : ''}
+        </div>
+    </div>`;
+}
+
+function renderAssetVisitedItem(page) {
+    const login = isLoginPage(page);
+    return `<li class="resultItem ${login ? 'login' : ''}">
+        <div class="resultItemIcon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                ${login ? `
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                ` : `
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                `}
+            </svg>
+        </div>
+        <div class="resultItemContent">
+            <div class="resultItemUrl">${page.url}</div>
+            <div class="resultItemMeta">
+                <span>${page.title || '无标题'}</span>
+                <span>状态: ${page.status_code}</span>
+                <span>深度: ${page.depth}</span>
+                ${page.discovered_at ? `<span>发现于: ${formatTime(page.discovered_at)}</span>` : ''}
+            </div>
+        </div>
+    </li>`;
+}
+
+function renderAssetFailedItem(url) {
+    return `<li class="resultItem failed">
+        <div class="resultItemIcon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+        </div>
+        <div class="resultItemContent">
+            <div class="resultItemUrl">${url}</div>
+            <div class="resultItemMeta"><span>访问失败</span></div>
+        </div>
+    </li>`;
+}
+
+function renderAssetPendingItem(url) {
+    return `<li class="resultItem pending">
+        <div class="resultItemIcon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+        </div>
+        <div class="resultItemContent">
+            <div class="resultItemUrl">${url}</div>
+        </div>
+    </li>`;
+}
+
+// 渲染结果（带分页 + 滚动懒加载）
 function renderResults() {
     const resultContent = document.getElementById('resultContent');
+    ensureScrollLoadMore();
 
     if (!selectedDomain) {
         resultContent.innerHTML = `
@@ -674,9 +887,7 @@ function renderResults() {
     }
 
     switch (currentTab) {
-        case 'subdomains':
-            // 子域名列表（纯字符串数组）
-            // 兼容不同格式：可能是 discovery.subdomains 或直接在 discovery 中
+        case 'subdomains': {
             let subdomains = [];
             if (selectedDomain.discovery) {
                 if (Array.isArray(selectedDomain.discovery.subdomains)) {
@@ -685,24 +896,17 @@ function renderResults() {
                     subdomains = selectedDomain.discovery;
                 }
             }
-            // 如果子域名为空，尝试从 visited_pages 中提取子域名
             if (subdomains.length === 0 && selectedDomain.crawl?.visited_pages) {
                 const visitedHosts = new Set();
                 selectedDomain.crawl.visited_pages.forEach(page => {
-                    try {
-                        const host = new URL(page.url).hostname;
-                        visitedHosts.add(host);
-                    } catch (e) {}
+                    try { visitedHosts.add(new URL(page.url).hostname); } catch (e) {}
                 });
                 subdomains = Array.from(visitedHosts);
             }
 
-            // 获取 discovery 元数据和错误信息
             const discoveryMeta = selectedDomain.discovery?.metadata || {};
             const discoveryError = selectedDomain.discovery?.error;
-            const discoveryStats = selectedDomain.discovery?.statistics || {};
 
-            // 构建统计信息头部
             let subdomainHeader = '';
             if (discoveryMeta.started_at || discoveryMeta.duration_seconds || discoveryError) {
                 subdomainHeader = `
@@ -726,38 +930,21 @@ function renderResults() {
                 `;
             }
 
+            const firstPage = subdomains.slice(0, PAGE_SIZE);
+            tabRenderState.subdomains = { allItems: subdomains, rendered: firstPage.length };
+
             resultContent.innerHTML = subdomainHeader + (subdomains.length > 0 ? `
                 <ul class="resultList">
-                    ${subdomains.map(subdomain => `
-                        <li class="subdomainItem">
-                            <div class="subdomainIcon">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                                </svg>
-                            </div>
-                            <div class="subdomainContent">
-                                <div class="subdomainUrl">${subdomain}</div>
-                            </div>
-                            <a href="https://${subdomain}" target="_blank" class="subdomainLink" onclick="event.stopPropagation()">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                                    <polyline points="15 3 21 3 21 9"></polyline>
-                                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                                </svg>
-                            </a>
-                        </li>
-                    `).join('')}
+                    ${firstPage.map(renderSubdomainItem).join('')}
                 </ul>
+                ${loadMoreHtml(firstPage.length, subdomains.length)}
             ` : '<div class="resultEmpty"><p>暂无发现的子域名</p></div>');
             break;
+        }
 
-        case 'logins':
-            // 从 visited_pages 中提取登录页面
+        case 'logins': {
             const allLoginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
 
-            // 统计各维度数量
             const confidenceCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
             const authTypeCounts = {};
             const mfaCounts = {};
@@ -770,17 +957,12 @@ function renderResults() {
                 if (isEasyBreach(p)) easyBreachCount++;
             });
 
-            // 综合过滤
             const loginPages = applyLoginFilters(allLoginPages);
-
-            // 存储到全局变量供点击使用（用过滤后的列表）
             window.currentLoginPages = loginPages;
 
-            // 获取 crawl 元数据
             const crawlMeta = selectedDomain.crawl?.metadata || {};
             const crawlStats = selectedDomain.crawl?.statistics || {};
 
-            // 构建统计信息头部
             let loginHeader = '';
             if (crawlMeta.started_at || crawlMeta.duration_seconds) {
                 loginHeader = `
@@ -800,7 +982,6 @@ function renderResults() {
                 `;
             }
 
-            // 认证类型按钮定义（key -> 显示名）
             const authTypeDefs = [
                 ['all', '全部'],
                 ['EMAIL:PASS', '邮箱密码'],
@@ -810,7 +991,6 @@ function renderResults() {
                 ['UNKNOWN', '未知']
             ];
 
-            // 多维过滤器栏
             const hasAnyFilter = confidenceFilter !== 'all' || authTypeFilter !== 'all' || mfaFilter !== 'all' || easyBreachFilter;
             const filterBarHtml = `
                 <div class="loginFilterBar">
@@ -860,88 +1040,16 @@ function renderResults() {
                 </div>
             `;
 
+            const firstPage = loginPages.slice(0, PAGE_SIZE);
+            tabRenderState.logins = { allItems: loginPages, rendered: firstPage.length };
+
             resultContent.innerHTML = loginHeader + filterBarHtml + (loginPages.length > 0 ? `
                 <div class="loginCardGrid">
-                    ${loginPages.map((page, index) => {
-                const screenshotUrl = getScreenshotUrl(page.screenshot_path);
-                const hasPopups = page.popup_login_screenshot_path && page.popup_login_screenshot_path.length > 0;
-                const confidence = getConfidenceLevel(page);
-                const confidenceLabel = { HIGH: '高', MEDIUM: '中', LOW: '低' }[confidence];
-                return `
-                        <div class="loginCard" onclick="openLoginScreenshot(${index})">
-                            <div class="loginCardScreenshot">
-                                <span class="confidenceBadge cf${confidence}">${confidenceLabel}</span>
-                                ${screenshotUrl ? `
-                                    <img src="${screenshotUrl}" alt="${page.title || '登录页面'}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                    <div class="screenshotPlaceholder" style="display:none;">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                            <polyline points="21 15 16 10 5 21"></polyline>
-                                        </svg>
-                                        <span>加载失败</span>
-                                    </div>
-                                    <div class="viewOverlay">
-                                        <span>点击查看大图</span>
-                                    </div>
-                                ` : `
-                                    <div class="screenshotPlaceholder">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                            <polyline points="21 15 16 10 5 21"></polyline>
-                                        </svg>
-                                        <span>暂无截图</span>
-                                    </div>
-                                `}
-                            </div>
-                            <div class="loginCardBody">
-                                <div class="loginCardTitle">${page.title || '登录页面'}</div>
-                                <div class="loginCardUrl">${page.url}</div>
-                                <div class="loginCardTags">
-                                    ${(() => {
-                    const parsed = parseLoginPageStatus(page.is_login_page);
-                    const verified = parsed.detail && parsed.detail.toUpperCase().startsWith('VERIFIED');
-                    return `<span class="loginCardTag auth">${verified ? '已验证' : '登录页'}</span>`;
-                })()}
-                                    ${hasPopups ? `<span class="loginCardTag popup">+${page.popup_login_screenshot_path.length}弹窗</span>` : ''}
-                                    <span class="loginCardTag">${page.status_code}</span>
-                                    <span class="loginCardTag depth">深度${page.depth || 0}</span>
-                                    ${(() => {
-                    const det = page.login_detection || {};
-                    const scope = det.scope || '';
-                    if (scope === 'external_one_hop') return '<span class="loginCardTag scope">外部跳转</span>';
-                    if (scope && scope !== 'in_scope') return `<span class="loginCardTag scope">${scope}</span>`;
-                    return '';
-                })()}
-                                    ${(() => {
-                    const llm = getLlmVerification(page);
-                    if (!llm) return '';
-                    let tags = '';
-                    if (llm.auth_types && llm.auth_types.length > 0) {
-                        tags += llm.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('');
-                    }
-                    if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA' && llm.mfa_confirmation !== 'UNKNOWN') {
-                        tags += '<span class="loginCardTag mfa">MFA</span>';
-                    }
-                    return tags;
-                })()}
-                                    ${(() => {
-                    const signals = (page.login_detection || {}).signals || [];
-                    return signals.map(s => `<span class="loginCardTag signal">${s.replace(/_/g, ' ')}</span>`).join('');
-                })()}
-                                </div>
-                                <div class="loginCardDesc">${formatLoginDesc(page)}</div>
-                                ${page.login_detection && page.login_detection.referrer ? `<div class="loginCardReferrer">来源: ${page.login_detection.referrer}</div>` : ''}
-                                ${page.login_detection_error ? `<div class="loginCardError">${page.login_detection_error}</div>` : ''}
-                                ${page.discovered_at ? `<div class="loginCardTime">发现于 ${formatTime(page.discovered_at)}</div>` : ''}
-                            </div>
-                        </div>
-                    `}).join('')}
+                    ${firstPage.map((page, i) => renderLoginCard(page, i)).join('')}
                 </div>
+                ${loadMoreHtml(firstPage.length, loginPages.length)}
             ` : `<div class="resultEmpty"><p>${hasAnyFilter ? '当前过滤条件下暂无登录入口' : '暂无发现的登录入口'}</p></div>`);
 
-            // 绑定过滤器按钮事件
             resultContent.querySelectorAll('.confidenceFilterBtn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -951,6 +1059,7 @@ function renderResults() {
                     if (group === 'confidence') confidenceFilter = level;
                     else if (group === 'authType') authTypeFilter = level;
                     else if (group === 'mfa') mfaFilter = level;
+                    tabRenderState.logins = { rendered: 0, dataKey: null };
                     renderResults();
                 });
             });
@@ -959,6 +1068,7 @@ function renderResults() {
                 easyBreachBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     easyBreachFilter = !easyBreachFilter;
+                    tabRenderState.logins = { rendered: 0, dataKey: null };
                     renderResults();
                 });
             }
@@ -970,22 +1080,21 @@ function renderResults() {
                     authTypeFilter = 'all';
                     mfaFilter = 'all';
                     easyBreachFilter = false;
+                    tabRenderState.logins = { rendered: 0, dataKey: null };
                     renderResults();
                 });
             }
             break;
+        }
 
-        case 'assets':
-            // 资产路径：显示所有发现的URL
+        case 'assets': {
             const discoveredUrls = selectedDomain.crawl?.discovered_urls || selectedDomain.discovery?.urls || [];
             const visitedPages = selectedDomain.crawl?.visited_pages || [];
             const failedUrls = selectedDomain.crawl?.failed_urls || [];
 
-            // 获取 crawl 统计信息
             const assetCrawlMeta = selectedDomain.crawl?.metadata || {};
             const assetCrawlStats = selectedDomain.crawl?.statistics || {};
 
-            // 构建统计信息头部
             let assetHeader = `
                 <div class="resultStatsHeader">
                     <div class="statsRow">
@@ -1001,11 +1110,12 @@ function renderResults() {
                 </div>
             `;
 
-            // 合并所有URL展示
             let assetContent = '';
 
-            // 已访问页面
             if (visitedPages.length > 0) {
+                const firstSlice = visitedPages.slice(0, PAGE_SIZE);
+                tabRenderState.assets = { allItems: visitedPages, rendered: firstSlice.length };
+
                 assetContent += `
                     <div class="assetSection">
                         <h4 class="assetSectionTitle">
@@ -1014,38 +1124,18 @@ function renderResults() {
                             </svg>
                             已访问页面 (${visitedPages.length})
                         </h4>
-                        <ul class="resultList">
-                            ${visitedPages.map(page => `
-                                <li class="resultItem ${isLoginPage(page) ? 'login' : ''}">
-                                    <div class="resultItemIcon">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            ${isLoginPage(page) ? `
-                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                            ` : `
-                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                                <polyline points="14 2 14 8 20 8"></polyline>
-                                            `}
-                                        </svg>
-                                    </div>
-                                    <div class="resultItemContent">
-                                        <div class="resultItemUrl">${page.url}</div>
-                                        <div class="resultItemMeta">
-                                            <span>${page.title || '无标题'}</span>
-                                            <span>状态: ${page.status_code}</span>
-                                            <span>深度: ${page.depth}</span>
-                                            ${page.discovered_at ? `<span>发现于: ${formatTime(page.discovered_at)}</span>` : ''}
-                                        </div>
-                                    </div>
-                                </li>
-                            `).join('')}
+                        <ul class="resultList" id="assetVisitedList">
+                            ${firstSlice.map(renderAssetVisitedItem).join('')}
                         </ul>
+                        ${loadMoreHtml(firstSlice.length, visitedPages.length)}
                     </div>
                 `;
+            } else {
+                tabRenderState.assets = { allItems: [], rendered: 0 };
             }
 
-            // 失败URL列表
             if (failedUrls.length > 0) {
+                const failedSlice = failedUrls.slice(0, PAGE_SIZE);
                 assetContent += `
                     <div class="assetSection">
                         <h4 class="assetSectionTitle failed">
@@ -1057,30 +1147,18 @@ function renderResults() {
                             失败URL (${failedUrls.length})
                         </h4>
                         <ul class="resultList">
-                            ${failedUrls.map(url => `
-                                <li class="resultItem failed">
-                                    <div class="resultItemIcon">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                                            <line x1="9" y1="9" x2="15" y2="15"></line>
-                                        </svg>
-                                    </div>
-                                    <div class="resultItemContent">
-                                        <div class="resultItemUrl">${url}</div>
-                                        <div class="resultItemMeta"><span>访问失败</span></div>
-                                    </div>
-                                </li>
-                            `).join('')}
+                            ${failedSlice.map(renderAssetFailedItem).join('')}
                         </ul>
+                        ${failedUrls.length > PAGE_SIZE ? `<div class="loadMoreNote">仅显示前 ${PAGE_SIZE} 条</div>` : ''}
                     </div>
                 `;
             }
 
-            // 未访问的发现URL（最多显示100个）
-            const unvisitedUrls = discoveredUrls.filter(url => !visitedPages.some(p => p.url === url) && !failedUrls.includes(url));
+            const visitedSet = new Set(visitedPages.map(p => p.url));
+            const failedSet = new Set(failedUrls);
+            const unvisitedUrls = discoveredUrls.filter(url => !visitedSet.has(url) && !failedSet.has(url));
             if (unvisitedUrls.length > 0) {
-                const displayUrls = unvisitedUrls.slice(0, 100);
+                const displayUrls = unvisitedUrls.slice(0, PAGE_SIZE);
                 assetContent += `
                     <div class="assetSection">
                         <h4 class="assetSectionTitle pending">
@@ -1089,21 +1167,10 @@ function renderResults() {
                                 <polyline points="12 6 12 12 16 14"></polyline>
                             </svg>
                             待访问URL (${unvisitedUrls.length})
-                            ${unvisitedUrls.length > 100 ? `<span class="sectionNote">仅显示前100个</span>` : ''}
+                            ${unvisitedUrls.length > PAGE_SIZE ? `<span class="sectionNote">仅显示前${PAGE_SIZE}个</span>` : ''}
                         </h4>
                         <ul class="resultList resultListCompact">
-                            ${displayUrls.map(url => `
-                                <li class="resultItem pending">
-                                    <div class="resultItemIcon">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                        </svg>
-                                    </div>
-                                    <div class="resultItemContent">
-                                        <div class="resultItemUrl">${url}</div>
-                                    </div>
-                                </li>
-                            `).join('')}
+                            ${displayUrls.map(renderAssetPendingItem).join('')}
                         </ul>
                     </div>
                 `;
@@ -1111,9 +1178,9 @@ function renderResults() {
 
             resultContent.innerHTML = assetHeader + (assetContent || '<div class="resultEmpty"><p>暂无发现的资产路径</p></div>');
             break;
+        }
 
         case 'logs':
-            // 实时日志
             renderLogsTab(resultContent);
             break;
     }
