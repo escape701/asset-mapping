@@ -1074,6 +1074,30 @@
     animation: spin 1s linear infinite;
 }
 
+/* 导出报告按钮 */
+.exportBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    background: linear-gradient(135deg, #059669, #047857);
+    color: white;
+    border: none;
+    margin-left: 10px;
+}
+
+.exportBtn:hover {
+    background: linear-gradient(135deg, #047857, #065f46);
+    transform: translateY(-1px);
+}
+
+.exportBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
 /* 删除按钮样式 */
 .deleteTaskBtn {
     display: flex;
@@ -1582,6 +1606,11 @@
     font-size: 10px;
 }
 
+.loginCardTag.unknown {
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+
 /* 来源链接 */
 .loginCardReferrer {
     margin-top: 4px;
@@ -1616,45 +1645,6 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-}
-
-/* 易突破入口按钮 */
-.easyBreachBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 16px;
-    border: 2px solid #ef4444;
-    border-radius: 20px;
-    background: white;
-    color: #dc2626;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-.easyBreachBtn:hover {
-    background: #fef2f2;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
-}
-
-.easyBreachBtn.active {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    color: white;
-    border-color: #dc2626;
-    box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
-}
-
-.easyBreachBtn .confidenceFilterCount {
-    background: rgba(239, 68, 68, 0.12);
-    color: #dc2626;
-}
-
-.easyBreachBtn.active .confidenceFilterCount {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
 }
 
 /* 清除过滤按钮 */

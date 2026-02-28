@@ -7,10 +7,9 @@ let conversationHistory = [];
 let logPollingInterval = null;
 let lastLogLine = 0;
 let autoScrollLogs = true;
-let confidenceFilter = 'all';
-let authTypeFilter = 'all';
-let mfaFilter = 'all';
-let easyBreachFilter = false;
+let confidenceFilter = new Set();
+let authTypeFilter = new Set();
+let mfaFilter = new Set();
 
 const PAGE_SIZE = 80;
 let tabRenderState = {};
@@ -403,26 +402,14 @@ function getPageMfa(page) {
     return llm.mfa_confirmation.toUpperCase();
 }
 
-// 判断页面是否为"易突破入口"：auth_types 含 email:pass 或 uid:pass 且 mfa == NO MFA
-function isEasyBreach(page) {
-    const types = getPageAuthTypes(page);
-    const mfa = getPageMfa(page);
-    const hasWeakAuth = types.some(t => t === 'EMAIL:PASS' || t === 'UID:PASS');
-    return hasWeakAuth && mfa === 'NO MFA';
-}
-
-// 综合过滤：置信度 + 认证类型 + MFA + 易突破
 function applyLoginFilters(pages) {
     return pages.filter(p => {
-        if (easyBreachFilter) return isEasyBreach(p);
-        if (confidenceFilter !== 'all' && getConfidenceLevel(p) !== confidenceFilter) return false;
-        if (authTypeFilter !== 'all') {
+        if (confidenceFilter.size > 0 && !confidenceFilter.has(getConfidenceLevel(p))) return false;
+        if (authTypeFilter.size > 0) {
             const types = getPageAuthTypes(p);
-            if (!types.some(t => t === authTypeFilter)) return false;
+            if (!types.some(t => authTypeFilter.has(t))) return false;
         }
-        if (mfaFilter !== 'all') {
-            if (getPageMfa(p) !== mfaFilter) return false;
-        }
+        if (mfaFilter.size > 0 && !mfaFilter.has(getPageMfa(p))) return false;
         return true;
     });
 }
@@ -765,9 +752,15 @@ function renderLoginCard(page, index) {
     let llmTags = '';
     if (llm) {
         if (llm.auth_types && llm.auth_types.length > 0)
-            llmTags += llm.auth_types.map(t => `<span class="loginCardTag authType">${t}</span>`).join('');
-        if (llm.mfa_confirmation && llm.mfa_confirmation !== 'NO MFA' && llm.mfa_confirmation !== 'UNKNOWN')
-            llmTags += '<span class="loginCardTag mfa">MFA</span>';
+            llmTags += llm.auth_types.map(t => {
+                const cls = t.toUpperCase() === 'UNKNOWN' ? 'unknown' : 'authType';
+                return `<span class="loginCardTag ${cls}">${t}</span>`;
+            }).join('');
+        if (llm.mfa_confirmation) {
+            const mfaUpper = llm.mfa_confirmation.toUpperCase();
+            if (mfaUpper === 'UNKNOWN') llmTags += '<span class="loginCardTag unknown">未确认MFA</span>';
+            else if (mfaUpper !== 'NO MFA') llmTags += '<span class="loginCardTag mfa">MFA</span>';
+        }
     }
 
     return `<div class="loginCard" onclick="openLoginScreenshot(${index})">
@@ -948,13 +941,11 @@ function renderResults() {
             const confidenceCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
             const authTypeCounts = {};
             const mfaCounts = {};
-            let easyBreachCount = 0;
             allLoginPages.forEach(p => {
                 confidenceCounts[getConfidenceLevel(p)]++;
                 getPageAuthTypes(p).forEach(t => { authTypeCounts[t] = (authTypeCounts[t] || 0) + 1; });
                 const mfa = getPageMfa(p);
                 mfaCounts[mfa] = (mfaCounts[mfa] || 0) + 1;
-                if (isEasyBreach(p)) easyBreachCount++;
             });
 
             const loginPages = applyLoginFilters(allLoginPages);
@@ -973,7 +964,7 @@ function renderResults() {
                             ${crawlMeta.duration_seconds ? `<span class="statItem"><strong>耗时:</strong> ${formatDuration(crawlMeta.duration_seconds)}</span>` : ''}
                         </div>
                         <div class="statsRow">
-                            <span class="statItem"><strong>总发现:</strong> ${crawlStats.total_discovered || 0} URL</span>
+                            <span class="statItem"><strong>已发现:</strong> ${crawlStats.total_discovered || 0} URL</span>
                             <span class="statItem"><strong>已访问:</strong> ${crawlStats.total_visited || 0}</span>
                             <span class="statItem"><strong>登录页:</strong> ${allLoginPages.length}</span>
                             ${crawlStats.total_failed > 0 ? `<span class="statItem statFailed"><strong>失败:</strong> ${crawlStats.total_failed}</span>` : ''}
@@ -982,60 +973,40 @@ function renderResults() {
                 `;
             }
 
-            const authTypeDefs = [
-                ['all', '全部'],
-                ['EMAIL:PASS', '邮箱密码'],
-                ['UID:PASS', '用户名密码'],
-                ['OAUTH', 'OAuth'],
-                ['OIDC', 'OIDC'],
-                ['UNKNOWN', '未知']
-            ];
-
-            const hasAnyFilter = confidenceFilter !== 'all' || authTypeFilter !== 'all' || mfaFilter !== 'all' || easyBreachFilter;
+            const hasAnyFilter = confidenceFilter.size > 0 || authTypeFilter.size > 0 || mfaFilter.size > 0;
+            const confLabels = { HIGH: '高', MEDIUM: '中', LOW: '低' };
             const filterBarHtml = `
                 <div class="loginFilterBar">
                     <div class="loginFilterRow">
-                        <button class="easyBreachBtn ${easyBreachFilter ? 'active' : ''}" data-action="easyBreach">
-                            ⚡ 易突破入口 <span class="confidenceFilterCount">${easyBreachCount}</span>
+                        <span class="confidenceFilterLabel">置信度:</span>
+                        <button class="confidenceFilterBtn ${confidenceFilter.size === 0 ? 'active' : ''}" data-group="confidence" data-level="all">
+                            全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
                         </button>
+                        ${Object.keys(confidenceCounts).filter(c => confidenceCounts[c] > 0).map(c => `
+                        <button class="confidenceFilterBtn ${confidenceFilter.has(c) ? 'active' : ''}" data-group="confidence" data-level="${c}">
+                            ${confLabels[c] || c} <span class="confidenceFilterCount">${confidenceCounts[c]}</span>
+                        </button>`).join('')}
                         ${hasAnyFilter ? `<button class="filterResetBtn" data-action="resetAll">清除过滤</button>` : ''}
                     </div>
                     <div class="loginFilterRow">
-                        <span class="confidenceFilterLabel">置信度:</span>
-                        <button class="confidenceFilterBtn ${confidenceFilter === 'all' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="all">
+                        <span class="confidenceFilterLabel">认证:</span>
+                        <button class="confidenceFilterBtn cfAuth ${authTypeFilter.size === 0 ? 'active' : ''}" data-group="authType" data-level="all">
                             全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
                         </button>
-                        <button class="confidenceFilterBtn cfHigh ${confidenceFilter === 'HIGH' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="HIGH">
-                            高 <span class="confidenceFilterCount">${confidenceCounts.HIGH}</span>
-                        </button>
-                        <button class="confidenceFilterBtn cfMedium ${confidenceFilter === 'MEDIUM' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="MEDIUM">
-                            中 <span class="confidenceFilterCount">${confidenceCounts.MEDIUM}</span>
-                        </button>
-                        <button class="confidenceFilterBtn cfLow ${confidenceFilter === 'LOW' && !easyBreachFilter ? 'active' : ''}" data-group="confidence" data-level="LOW">
-                            低 <span class="confidenceFilterCount">${confidenceCounts.LOW}</span>
-                        </button>
-                    </div>
-                    <div class="loginFilterRow">
-                        <span class="confidenceFilterLabel">认证类型:</span>
-                        ${authTypeDefs.map(([key, label]) => {
-                const cnt = key === 'all' ? allLoginPages.length : (authTypeCounts[key] || 0);
-                const isActive = authTypeFilter === key && !easyBreachFilter;
-                return `<button class="confidenceFilterBtn cfAuth ${isActive ? 'active' : ''}" data-group="authType" data-level="${key}">
-                                ${label} <span class="confidenceFilterCount">${cnt}</span>
-                            </button>`;
-            }).join('')}
+                        ${Object.keys(authTypeCounts).map(k => `
+                        <button class="confidenceFilterBtn cfAuth ${authTypeFilter.has(k) ? 'active' : ''}" data-group="authType" data-level="${k}">
+                            ${k} <span class="confidenceFilterCount">${authTypeCounts[k]}</span>
+                        </button>`).join('')}
                     </div>
                     <div class="loginFilterRow">
                         <span class="confidenceFilterLabel">MFA:</span>
-                        <button class="confidenceFilterBtn cfMfa ${mfaFilter === 'all' && !easyBreachFilter ? 'active' : ''}" data-group="mfa" data-level="all">
+                        <button class="confidenceFilterBtn cfMfa ${mfaFilter.size === 0 ? 'active' : ''}" data-group="mfa" data-level="all">
                             全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
                         </button>
-                        <button class="confidenceFilterBtn cfMfa ${mfaFilter === 'NO MFA' && !easyBreachFilter ? 'active' : ''}" data-group="mfa" data-level="NO MFA">
-                            无MFA <span class="confidenceFilterCount">${mfaCounts['NO MFA'] || 0}</span>
-                        </button>
-                        <button class="confidenceFilterBtn cfMfa ${mfaFilter === 'UNKNOWN' && !easyBreachFilter ? 'active' : ''}" data-group="mfa" data-level="UNKNOWN">
-                            未确认 <span class="confidenceFilterCount">${mfaCounts['UNKNOWN'] || 0}</span>
-                        </button>
+                        ${Object.keys(mfaCounts).map(m => `
+                        <button class="confidenceFilterBtn cfMfa ${mfaFilter.has(m) ? 'active' : ''}" data-group="mfa" data-level="${m}">
+                            ${m} <span class="confidenceFilterCount">${mfaCounts[m]}</span>
+                        </button>`).join('')}
                     </div>
                 </div>
             `;
@@ -1053,33 +1024,30 @@ function renderResults() {
             resultContent.querySelectorAll('.confidenceFilterBtn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    easyBreachFilter = false;
                     const group = btn.dataset.group;
                     const level = btn.dataset.level;
-                    if (group === 'confidence') confidenceFilter = level;
-                    else if (group === 'authType') authTypeFilter = level;
-                    else if (group === 'mfa') mfaFilter = level;
+                    const filterMap = { confidence: confidenceFilter, authType: authTypeFilter, mfa: mfaFilter };
+                    const target = filterMap[group];
+                    if (target) {
+                        if (level === 'all') {
+                            target.clear();
+                        } else if (target.has(level)) {
+                            target.delete(level);
+                        } else {
+                            target.add(level);
+                        }
+                    }
                     tabRenderState.logins = { rendered: 0, dataKey: null };
                     renderResults();
                 });
             });
-            const easyBreachBtn = resultContent.querySelector('.easyBreachBtn');
-            if (easyBreachBtn) {
-                easyBreachBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    easyBreachFilter = !easyBreachFilter;
-                    tabRenderState.logins = { rendered: 0, dataKey: null };
-                    renderResults();
-                });
-            }
             const resetBtn = resultContent.querySelector('.filterResetBtn');
             if (resetBtn) {
                 resetBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    confidenceFilter = 'all';
-                    authTypeFilter = 'all';
-                    mfaFilter = 'all';
-                    easyBreachFilter = false;
+                    confidenceFilter.clear();
+                    authTypeFilter.clear();
+                    mfaFilter.clear();
                     tabRenderState.logins = { rendered: 0, dataKey: null };
                     renderResults();
                 });
@@ -1103,7 +1071,7 @@ function renderResults() {
                         ${assetCrawlMeta.duration_seconds ? `<span class="statItem"><strong>耗时:</strong> ${formatDuration(assetCrawlMeta.duration_seconds)}</span>` : ''}
                     </div>
                     <div class="statsRow">
-                        <span class="statItem statDiscovered"><strong>总发现:</strong> ${discoveredUrls.length || assetCrawlStats.total_discovered || 0} URL</span>
+                        <span class="statItem statDiscovered"><strong>已发现:</strong> ${discoveredUrls.length || assetCrawlStats.total_discovered || 0} URL</span>
                         <span class="statItem statVisited"><strong>已访问:</strong> ${visitedPages.length || assetCrawlStats.total_visited || 0}</span>
                         ${failedUrls.length > 0 ? `<span class="statItem statFailed"><strong>失败:</strong> ${failedUrls.length}</span>` : ''}
                     </div>
@@ -1154,11 +1122,8 @@ function renderResults() {
                 `;
             }
 
-            const visitedSet = new Set(visitedPages.map(p => p.url));
-            const failedSet = new Set(failedUrls);
-            const unvisitedUrls = discoveredUrls.filter(url => !visitedSet.has(url) && !failedSet.has(url));
-            if (unvisitedUrls.length > 0) {
-                const displayUrls = unvisitedUrls.slice(0, PAGE_SIZE);
+            if (discoveredUrls.length > 0) {
+                const displayDiscovered = discoveredUrls.slice(0, PAGE_SIZE);
                 assetContent += `
                     <div class="assetSection">
                         <h4 class="assetSectionTitle pending">
@@ -1166,11 +1131,11 @@ function renderResults() {
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <polyline points="12 6 12 12 16 14"></polyline>
                             </svg>
-                            待访问URL (${unvisitedUrls.length})
-                            ${unvisitedUrls.length > PAGE_SIZE ? `<span class="sectionNote">仅显示前${PAGE_SIZE}个</span>` : ''}
+                            已发现URL (${discoveredUrls.length})
+                            ${discoveredUrls.length > PAGE_SIZE ? `<span class="sectionNote">仅显示前${PAGE_SIZE}个</span>` : ''}
                         </h4>
                         <ul class="resultList resultListCompact">
-                            ${displayUrls.map(renderAssetPendingItem).join('')}
+                            ${displayDiscovered.map(renderAssetPendingItem).join('')}
                         </ul>
                     </div>
                 `;
@@ -1525,7 +1490,7 @@ function buildContext() {
 
         context += `子域名数: ${subdomains.length}\n`;
         context += `登录入口数: ${loginPages.length}\n`;
-        context += `总发现URL: ${stats.total_discovered || 0}\n`;
+        context += `已发现URL: ${stats.total_discovered || 0}\n`;
         context += `已访问页面: ${stats.total_visited || 0}\n`;
         context += `失败数: ${stats.total_failed || 0}\n\n`;
 
@@ -1795,6 +1760,57 @@ function closeConfirmModal() {
     const modal = document.getElementById('confirmModal');
     if (modal) {
         modal.classList.remove('show');
+    }
+}
+
+// 导出静态 HTML 报告
+async function exportReport() {
+    const exportBtn = document.getElementById('exportBtn');
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = `
+            <svg class="spinning" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56"></path>
+            </svg>
+            生成中...
+        `;
+    }
+
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/export`);
+        if (!response.ok) {
+            throw new Error(`导出失败: HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report-${taskId}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        if (typeof showMessage === 'function') {
+            showMessage('报告导出成功', 'success');
+        }
+    } catch (error) {
+        console.error('导出报告失败:', error);
+        if (typeof showMessage === 'function') {
+            showMessage('导出报告失败: ' + error.message, 'error');
+        }
+    } finally {
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                导出报告
+            `;
+        }
     }
 }
 

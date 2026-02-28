@@ -8,13 +8,19 @@ import com.example.entity.User;
 import com.example.service.TaskService;
 import com.example.service.CrawlerService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpSession;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * 任务控制器
@@ -23,15 +29,15 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
-    
+
     private final TaskService taskService;
     private final CrawlerService crawlerService;
-    
+
     public TaskController(TaskService taskService, CrawlerService crawlerService) {
         this.taskService = taskService;
         this.crawlerService = crawlerService;
     }
-    
+
     /**
      * 获取所有任务
      */
@@ -39,39 +45,39 @@ public class TaskController {
     public ResponseEntity<ApiResponse<List<TaskResponse>>> getAll() {
         List<Task> tasks = taskService.findAll();
         List<TaskResponse> responses = tasks.stream()
-            .map(TaskResponse::fromEntity)
-            .collect(Collectors.toList());
+                .map(TaskResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.success(responses));
     }
-    
+
     /**
      * 根据ID获取任务（包含完整的 discovery 和 crawl 数据）
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<TaskResponse>> getById(@PathVariable String id) {
         return taskService.findById(id)
-            .map(task -> {
-                TaskResponse response = TaskResponse.fromEntity(task);
-                
-                // 为每个域名填充完整的 discovery 和 crawl 数据
-                if (response.getDomains() != null) {
-                    for (TaskResponse.DomainInfo domainInfo : response.getDomains()) {
-                        try {
-                            Map<String, Object> discovery = crawlerService.readDiscoveryResult(id, domainInfo.getDomain());
-                            Map<String, Object> crawl = crawlerService.readCrawlResult(id, domainInfo.getDomain());
-                            domainInfo.setDiscovery(discovery);
-                            domainInfo.setCrawl(crawl);
-                        } catch (Exception e) {
-                            // 忽略读取失败
+                .map(task -> {
+                    TaskResponse response = TaskResponse.fromEntity(task);
+
+                    // 为每个域名填充完整的 discovery 和 crawl 数据
+                    if (response.getDomains() != null) {
+                        for (TaskResponse.DomainInfo domainInfo : response.getDomains()) {
+                            try {
+                                Map<String, Object> discovery = crawlerService.readDiscoveryResult(id, domainInfo.getDomain());
+                                Map<String, Object> crawl = crawlerService.readCrawlResult(id, domainInfo.getDomain());
+                                domainInfo.setDiscovery(discovery);
+                                domainInfo.setCrawl(crawl);
+                            } catch (Exception e) {
+                                // 忽略读取失败
+                            }
                         }
                     }
-                }
-                
-                return ResponseEntity.ok(ApiResponse.success(response));
-            })
-            .orElse(ResponseEntity.notFound().build());
+
+                    return ResponseEntity.ok(ApiResponse.success(response));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
-    
+
     /**
      * 直接从 Python 输出文件读取结果（用于演示/测试）
      * 无需数据库中存在任务记录
@@ -83,11 +89,11 @@ public class TaskController {
             // 读取 Python 输出的结果
             Map<String, Object> discovery = crawlerService.readDiscoveryResult("demo", domain);
             Map<String, Object> crawl = crawlerService.readCrawlResult("demo", domain);
-            
+
             if (discovery.isEmpty() && crawl.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             // 构建响应
             TaskResponse response = new TaskResponse();
             response.setId("demo-" + domain);
@@ -96,7 +102,7 @@ public class TaskController {
             response.setTotalDomains(1);
             response.setCompletedDomains(1);
             response.setCreatedAt(java.time.LocalDateTime.now());
-            
+
             // 从 crawl 结果获取统计信息
             Map<String, Object> stats = (Map<String, Object>) crawl.get("statistics");
             int visitedCount = 0;
@@ -105,11 +111,11 @@ public class TaskController {
                 visitedCount = getIntValue(stats, "total_visited");
                 failedCount = getIntValue(stats, "total_failed");
             }
-            
+
             // 从 discovery 结果获取子域名数量
             List<?> subdomains = (List<?>) discovery.get("subdomains");
             int subdomainCount = subdomains != null ? subdomains.size() : 0;
-            
+
             // 从 crawl 结果计算登录页数量
             List<Map<String, Object>> visitedPages = (List<Map<String, Object>>) crawl.get("visited_pages");
             int loginCount = 0;
@@ -120,11 +126,11 @@ public class TaskController {
                     }
                 }
             }
-            
+
             // 获取 landing URL
             Map<String, Object> metadata = (Map<String, Object>) crawl.get("metadata");
             String landingUrl = metadata != null ? (String) metadata.get("start_url") : null;
-            
+
             // 创建域名信息
             TaskResponse.DomainInfo domainInfo = new TaskResponse.DomainInfo();
             domainInfo.setDomain(domain);
@@ -136,15 +142,15 @@ public class TaskController {
             domainInfo.setFailedCount(failedCount);
             domainInfo.setDiscovery(discovery);
             domainInfo.setCrawl(crawl);
-            
+
             response.setDomains(java.util.Collections.singletonList(domainInfo));
-            
+
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 安全获取整数值
      */
@@ -155,7 +161,7 @@ public class TaskController {
         }
         return 0;
     }
-    
+
     /**
      * 创建任务
      */
@@ -166,14 +172,14 @@ public class TaskController {
         try {
             User currentUser = (User) session.getAttribute("currentUser");
             Long userId = currentUser != null ? currentUser.getUserId() : null;
-            
+
             Task task = taskService.create(request, userId);
             return ResponseEntity.ok(ApiResponse.success(TaskResponse.fromEntity(task)));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 启动任务
      */
@@ -186,7 +192,7 @@ public class TaskController {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 停止任务
      */
@@ -199,7 +205,7 @@ public class TaskController {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 删除任务
      * @param id 任务ID
@@ -216,7 +222,7 @@ public class TaskController {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 清理已完成的任务
      */
@@ -225,16 +231,16 @@ public class TaskController {
             @RequestParam(defaultValue = "true") boolean cleanupFiles) {
         try {
             int deleted = taskService.deleteCompletedTasks(cleanupFiles);
-            
+
             Map<String, Object> result = new java.util.HashMap<>();
             result.put("deleted", deleted);
-            
+
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 获取任务的实时日志
      * @param id 任务ID
@@ -253,7 +259,7 @@ public class TaskController {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
      * 获取任务的最新日志（从末尾读取）
      * @param id 任务ID
@@ -270,21 +276,16 @@ public class TaskController {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
-    
+
     /**
-     * 手动同步任务进度（从 Python 输出文件读取）
+     * 导出任务报告为 ZIP（report.html + screenshots/）
      */
-    @PostMapping("/{id}/sync")
-    public ResponseEntity<ApiResponse<TaskResponse>> syncProgress(@PathVariable String id) {
-        try {
-            return taskService.findById(id)
+    @GetMapping("/{id}/export")
+    public ResponseEntity<byte[]> exportReport(@PathVariable String id) {
+        return taskService.findById(id)
                 .map(task -> {
-                    crawlerService.syncTaskProgress(task);
-                    // 重新加载任务以获取更新后的数据
-                    Task updatedTask = taskService.findById(id).orElse(task);
-                    TaskResponse response = TaskResponse.fromEntity(updatedTask);
-                    
-                    // 填充 discovery 和 crawl 数据
+                    TaskResponse response = TaskResponse.fromEntity(task);
+
                     if (response.getDomains() != null) {
                         for (TaskResponse.DomainInfo domainInfo : response.getDomains()) {
                             try {
@@ -293,14 +294,76 @@ public class TaskController {
                                 domainInfo.setDiscovery(discovery);
                                 domainInfo.setCrawl(crawl);
                             } catch (Exception e) {
-                                // 忽略读取失败
+                                log.warn("读取域名数据失败: {}", domainInfo.getDomain(), e);
                             }
                         }
                     }
-                    
-                    return ResponseEntity.ok(ApiResponse.success(response));
+
+                    Map<java.lang.String, java.io.File> screenshots = crawlerService.collectScreenshots(response);
+                    String html = crawlerService.generateExportHtml(response);
+
+                    try {
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+                            zos.putNextEntry(new ZipEntry("report.html"));
+                            zos.write(html.getBytes(StandardCharsets.UTF_8));
+                            zos.closeEntry();
+
+                            byte[] buf = new byte[8192];
+                            for (var entry : screenshots.entrySet()) {
+                                zos.putNextEntry(new ZipEntry(entry.getKey()));
+                                try (FileInputStream fis = new FileInputStream(entry.getValue())) {
+                                    int len;
+                                    while ((len = fis.read(buf)) > 0) zos.write(buf, 0, len);
+                                }
+                                zos.closeEntry();
+                            }
+                        }
+                        byte[] zipBytes = baos.toByteArray();
+
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(MediaType.parseMediaType("application/zip"));
+                        headers.setContentDispositionFormData("attachment", "report-" + id + ".zip");
+                        headers.setContentLength(zipBytes.length);
+                        return ResponseEntity.ok().headers(headers).body(zipBytes);
+                    } catch (IOException e) {
+                        log.error("生成 ZIP 报告失败: {}", id, e);
+                        return ResponseEntity.internalServerError().<byte[]>build();
+                    }
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 手动同步任务进度（从 Python 输出文件读取）
+     */
+    @PostMapping("/{id}/sync")
+    public ResponseEntity<ApiResponse<TaskResponse>> syncProgress(@PathVariable String id) {
+        try {
+            return taskService.findById(id)
+                    .map(task -> {
+                        crawlerService.syncTaskProgress(task);
+                        // 重新加载任务以获取更新后的数据
+                        Task updatedTask = taskService.findById(id).orElse(task);
+                        TaskResponse response = TaskResponse.fromEntity(updatedTask);
+
+                        // 填充 discovery 和 crawl 数据
+                        if (response.getDomains() != null) {
+                            for (TaskResponse.DomainInfo domainInfo : response.getDomains()) {
+                                try {
+                                    Map<String, Object> discovery = crawlerService.readDiscoveryResult(id, domainInfo.getDomain());
+                                    Map<String, Object> crawl = crawlerService.readCrawlResult(id, domainInfo.getDomain());
+                                    domainInfo.setDiscovery(discovery);
+                                    domainInfo.setCrawl(crawl);
+                                } catch (Exception e) {
+                                    // 忽略读取失败
+                                }
+                            }
+                        }
+
+                        return ResponseEntity.ok(ApiResponse.success(response));
+                    })
+                    .orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
