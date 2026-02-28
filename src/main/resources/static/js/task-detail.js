@@ -364,6 +364,54 @@ function extractLoginPages(visitedPages) {
     return visitedPages.filter(isLoginPage);
 }
 
+const _SAME_ENTRY_PREFIX = 'YES - but same login entry with ';
+
+function isSameEntryPage(page) {
+    if (!page || !page.is_login_page) return false;
+    return page.is_login_page.toString().trim().toLowerCase()
+        .startsWith(_SAME_ENTRY_PREFIX.toLowerCase());
+}
+
+function getSameEntryCanonicalUrl(page) {
+    if (!isSameEntryPage(page)) return null;
+    return page.is_login_page.toString().trim().substring(_SAME_ENTRY_PREFIX.length);
+}
+
+function groupLoginPages(loginPages) {
+    const groups = [];
+    const canonicalMap = {};
+
+    loginPages.forEach(page => {
+        const canonicalUrl = getSameEntryCanonicalUrl(page);
+        if (canonicalUrl) {
+            if (!canonicalMap[canonicalUrl]) {
+                canonicalMap[canonicalUrl] = [];
+            }
+            canonicalMap[canonicalUrl].push(page);
+        } else {
+            groups.push({ primary: page, duplicates: [] });
+        }
+    });
+
+    groups.forEach(group => {
+        const primaryUrl = group.primary.url;
+        if (canonicalMap[primaryUrl]) {
+            group.duplicates = canonicalMap[primaryUrl];
+            delete canonicalMap[primaryUrl];
+        }
+    });
+
+    for (const [url, pages] of Object.entries(canonicalMap)) {
+        groups.push({ primary: pages[0], duplicates: pages.slice(1), orphanCanonicalUrl: url });
+    }
+
+    return groups;
+}
+
+function countUniqueLoginEntries(visitedPages) {
+    return groupLoginPages(extractLoginPages(visitedPages)).length;
+}
+
 // 获取 login_detection 中的 LLM 验证信息（兼容新旧格式）
 function getLlmVerification(page) {
     const det = page.login_detection;
@@ -384,6 +432,15 @@ function getConfidenceLevel(page) {
         const authTypes = llm?.auth_types || [];
         const allUnknown = authTypes.length === 0 || authTypes.every(t => t.toUpperCase() === 'UNKNOWN');
         return allUnknown ? 'MEDIUM' : 'HIGH';
+    }
+    if (isSameEntryPage(page)) {
+        const llm = getLlmVerification(page);
+        if (llm) {
+            const authTypes = llm.auth_types || [];
+            const allUnknown = authTypes.length === 0 || authTypes.every(t => t.toUpperCase() === 'UNKNOWN');
+            return allUnknown ? 'MEDIUM' : 'HIGH';
+        }
+        return 'MEDIUM';
     }
     return 'LOW';
 }
@@ -441,6 +498,7 @@ function formatLoginDesc(page) {
         }
     }
     if (parts.length === 0) {
+        if (isSameEntryPage(page)) return '';
         const parsed = parseLoginPageStatus(page.is_login_page);
         if (parsed.detail && !parsed.detail.toUpperCase().startsWith('VERIFIED')) {
             return parsed.detail;
@@ -527,7 +585,7 @@ function renderDomainList() {
             });
             subdomainCount = hosts.size;
         }
-        const loginCount = extractLoginPages(domain.crawl?.visited_pages).length;
+        const loginCount = countUniqueLoginEntries(domain.crawl?.visited_pages);
 
         // 计算资产路径数（已访问页面数）
         let assetCount = 0;
@@ -699,7 +757,7 @@ function appendNextPage() {
         if (ul) ul.insertAdjacentHTML('beforeend', slice.map(renderSubdomainItem).join(''));
     } else if (currentTab === 'logins') {
         const grid = container.querySelector('.loginCardGrid');
-        if (grid) grid.insertAdjacentHTML('beforeend', slice.map((page, i) => renderLoginCard(page, start + i)).join(''));
+        if (grid) grid.insertAdjacentHTML('beforeend', slice.map((g, i) => renderLoginGroup(g, start + i)).join(''));
     }
 
     if (sentinel) {
@@ -774,7 +832,7 @@ function renderSubdomainItem(subdomain) {
     </li>`;
 }
 
-function renderLoginCard(page, index) {
+function renderLoginCardInner(page, screenshotClickAttr) {
     const screenshotUrl = getScreenshotUrl(page.screenshot_path);
     const hasPopups = page.popup_login_screenshot_path && page.popup_login_screenshot_path.length > 0;
     const confidence = getConfidenceLevel(page);
@@ -804,8 +862,7 @@ function renderLoginCard(page, index) {
         }
     }
 
-    return `<div class="loginCard" onclick="openLoginScreenshot(${index})">
-        <div class="loginCardScreenshot">
+    return `<div class="loginCardScreenshot" ${screenshotClickAttr}>
             <span class="confidenceBadge cf${confidence}">${confidenceLabel}</span>
             ${screenshotUrl ? `
                 <img src="${screenshotUrl}" alt="${page.title || '登录页面'}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
@@ -842,7 +899,48 @@ function renderLoginCard(page, index) {
             ${det.referrer ? `<div class="loginCardReferrer">来源: ${det.referrer}</div>` : ''}
             ${page.login_detection_error ? `<div class="loginCardError">${page.login_detection_error}</div>` : ''}
             ${page.discovered_at ? `<div class="loginCardTime">发现于 ${formatTime(page.discovered_at)}</div>` : ''}
-        </div>
+        </div>`;
+}
+
+function renderLoginCard(page, index) {
+    return `<div class="loginCard" onclick="openLoginScreenshot(${index})">
+        ${renderLoginCardInner(page, '')}
+    </div>`;
+}
+
+function renderLoginGroup(group, groupIndex) {
+    const page = group.primary;
+    const dups = group.duplicates || [];
+    const allGroupPages = [page, ...dups];
+
+    window._loginGroupPages = window._loginGroupPages || [];
+    const baseIdx = window._loginGroupPages.length;
+    allGroupPages.forEach(p => window._loginGroupPages.push(p));
+
+    let dupSection = '';
+    if (dups.length > 0) {
+        const dupItems = dups.map(d =>
+            `<li class="dupItem">
+                <a href="${d.url}" target="_blank" class="dupUrl" onclick="event.stopPropagation()">${d.url}</a>
+                <span class="dupMeta">${d.title || '无标题'} · ${d.status_code}</span>
+            </li>`
+        ).join('');
+
+        dupSection = `
+            <div class="loginCardDupBar" onclick="event.stopPropagation(); this.parentElement.classList.toggle('dupExpanded')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+                <span>+${dups.length} 个相同登录入口</span>
+            </div>
+            <div class="loginCardDupList">
+                <ul>${dupItems}</ul>
+            </div>`;
+    }
+
+    return `<div class="loginCard ${dups.length > 0 ? 'hasGroup' : ''}" onclick="openGroupScreenshot(${baseIdx})">
+        ${renderLoginCardInner(page, `onclick="event.stopPropagation(); openGroupScreenshot(${baseIdx})"`)}
+        ${dupSection}
     </div>`;
 }
 
@@ -978,19 +1076,32 @@ function renderResults() {
 
         case 'logins': {
             const allLoginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
+            const allGroups = groupLoginPages(allLoginPages);
+            const primaryPages = allGroups.map(g => g.primary);
+            const totalDupCount = allGroups.reduce((s, g) => s + g.duplicates.length, 0);
 
             const confidenceCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
             const authTypeCounts = {};
             const mfaCounts = {};
-            allLoginPages.forEach(p => {
+            primaryPages.forEach(p => {
                 confidenceCounts[getConfidenceLevel(p)]++;
                 getPageAuthTypes(p).forEach(t => { authTypeCounts[t] = (authTypeCounts[t] || 0) + 1; });
                 const mfa = getPageMfa(p);
                 mfaCounts[mfa] = (mfaCounts[mfa] || 0) + 1;
             });
 
-            const loginPages = applyLoginFilters(allLoginPages);
-            window.currentLoginPages = loginPages;
+            const filteredGroups = allGroups.filter(g => {
+                const p = g.primary;
+                if (confidenceFilter.size > 0 && !confidenceFilter.has(getConfidenceLevel(p))) return false;
+                if (authTypeFilter.size > 0) {
+                    const types = getPageAuthTypes(p);
+                    if (!types.some(t => authTypeFilter.has(t))) return false;
+                }
+                if (mfaFilter.size > 0 && !mfaFilter.has(getPageMfa(p))) return false;
+                return true;
+            });
+            window.currentLoginPages = filteredGroups.map(g => g.primary);
+            window._loginGroupPages = [];
 
             const crawlMeta = selectedDomain.crawl?.metadata || {};
             const crawlStats = selectedDomain.crawl?.statistics || {};
@@ -1007,7 +1118,8 @@ function renderResults() {
                         <div class="statsRow">
                             <span class="statItem"><strong>已发现:</strong> ${crawlStats.total_discovered || 0} URL</span>
                             <span class="statItem"><strong>已访问:</strong> ${crawlStats.total_visited || 0}</span>
-                            <span class="statItem"><strong>登录页:</strong> ${allLoginPages.length}</span>
+                            <span class="statItem"><strong>独立登录入口:</strong> ${allGroups.length}</span>
+                            ${totalDupCount > 0 ? `<span class="statItem"><strong>重复入口:</strong> ${totalDupCount}</span>` : ''}
                             ${crawlStats.total_failed > 0 ? `<span class="statItem statFailed"><strong>失败:</strong> ${crawlStats.total_failed}</span>` : ''}
                         </div>
                     </div>
@@ -1021,7 +1133,7 @@ function renderResults() {
                     <div class="loginFilterRow">
                         <span class="confidenceFilterLabel">置信度:</span>
                         <button class="confidenceFilterBtn ${confidenceFilter.size === 0 ? 'active' : ''}" data-group="confidence" data-level="all">
-                            全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
+                            全部 <span class="confidenceFilterCount">${primaryPages.length}</span>
                         </button>
                         ${Object.keys(confidenceCounts).filter(c => confidenceCounts[c] > 0).map(c => `
                         <button class="confidenceFilterBtn ${confidenceFilter.has(c) ? 'active' : ''}" data-group="confidence" data-level="${c}">
@@ -1032,7 +1144,7 @@ function renderResults() {
                     <div class="loginFilterRow">
                         <span class="confidenceFilterLabel">认证:</span>
                         <button class="confidenceFilterBtn cfAuth ${authTypeFilter.size === 0 ? 'active' : ''}" data-group="authType" data-level="all">
-                            全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
+                            全部 <span class="confidenceFilterCount">${primaryPages.length}</span>
                         </button>
                         ${Object.keys(authTypeCounts).map(k => `
                         <button class="confidenceFilterBtn cfAuth ${authTypeFilter.has(k) ? 'active' : ''}" data-group="authType" data-level="${k}">
@@ -1042,7 +1154,7 @@ function renderResults() {
                     <div class="loginFilterRow">
                         <span class="confidenceFilterLabel">MFA:</span>
                         <button class="confidenceFilterBtn cfMfa ${mfaFilter.size === 0 ? 'active' : ''}" data-group="mfa" data-level="all">
-                            全部 <span class="confidenceFilterCount">${allLoginPages.length}</span>
+                            全部 <span class="confidenceFilterCount">${primaryPages.length}</span>
                         </button>
                         ${Object.keys(mfaCounts).map(m => `
                         <button class="confidenceFilterBtn cfMfa ${mfaFilter.has(m) ? 'active' : ''}" data-group="mfa" data-level="${m}">
@@ -1052,14 +1164,14 @@ function renderResults() {
                 </div>
             `;
 
-            const firstPage = loginPages.slice(0, PAGE_SIZE);
-            tabRenderState.logins = { allItems: loginPages, rendered: firstPage.length };
+            const firstPage = filteredGroups.slice(0, PAGE_SIZE);
+            tabRenderState.logins = { allItems: filteredGroups, rendered: firstPage.length };
 
-            resultContent.innerHTML = loginHeader + filterBarHtml + (loginPages.length > 0 ? `
+            resultContent.innerHTML = loginHeader + filterBarHtml + (filteredGroups.length > 0 ? `
                 <div class="loginCardGrid">
-                    ${firstPage.map((page, i) => renderLoginCard(page, i)).join('')}
+                    ${firstPage.map((g, i) => renderLoginGroup(g, i)).join('')}
                 </div>
-                ${loadMoreHtml(firstPage.length, loginPages.length)}
+                ${loadMoreHtml(firstPage.length, filteredGroups.length)}
             ` : `<div class="resultEmpty"><p>${hasAnyFilter ? '当前过滤条件下暂无登录入口' : '暂无发现的登录入口'}</p></div>`);
 
             resultContent.querySelectorAll('.confidenceFilterBtn').forEach(btn => {
@@ -1408,6 +1520,18 @@ function openLoginScreenshot(index) {
     if (index >= loginPages.length) return;
 
     const page = loginPages[index];
+    _openScreenshotForPage(page);
+}
+
+function openGroupScreenshot(index) {
+    const pages = window._loginGroupPages || [];
+    if (index >= pages.length) return;
+
+    const page = pages[index];
+    _openScreenshotForPage(page);
+}
+
+function _openScreenshotForPage(page) {
     const images = [];
 
     if (page.screenshot_path) {
@@ -1524,10 +1648,11 @@ function buildContext() {
 
         const subdomains = domain.discovery?.subdomains || [];
         const loginPages = extractLoginPages(domain.crawl?.visited_pages);
+        const uniqueLoginCount = countUniqueLoginEntries(domain.crawl?.visited_pages);
         const stats = domain.crawl?.statistics || {};
 
         context += `子域名数: ${subdomains.length}\n`;
-        context += `登录入口数: ${loginPages.length}\n`;
+        context += `独立登录入口数: ${uniqueLoginCount}${loginPages.length > uniqueLoginCount ? ` (含 ${loginPages.length - uniqueLoginCount} 个重复)` : ''}\n`;
         context += `已发现URL: ${stats.total_discovered || 0}\n`;
         context += `已访问页面: ${stats.total_visited || 0}\n`;
         context += `失败数: ${stats.total_failed || 0}\n\n`;

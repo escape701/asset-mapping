@@ -1828,6 +1828,85 @@
     color: white;
 }
 
+/* ====== 重复登录入口堆叠 ====== */
+.loginCard.hasGroup {
+    border-left: 3px solid #8b5cf6;
+}
+
+.loginCardDupBar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #f5f3ff;
+    color: #6d28d9;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border-top: 1px solid #e5e7eb;
+    transition: background .15s;
+    user-select: none;
+}
+
+.loginCardDupBar:hover {
+    background: #ede9fe;
+}
+
+.loginCardDupBar svg {
+    flex-shrink: 0;
+    transition: transform .2s;
+}
+
+.loginCard.dupExpanded .loginCardDupBar svg {
+    transform: rotate(180deg);
+}
+
+.loginCardDupList {
+    display: none;
+    border-top: 1px solid #e5e7eb;
+    background: #fafafa;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.loginCard.dupExpanded .loginCardDupList {
+    display: block;
+}
+
+.loginCardDupList ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.loginCardDupList .dupItem {
+    padding: 6px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.loginCardDupList .dupItem:last-child {
+    border-bottom: none;
+}
+
+.loginCardDupList .dupUrl {
+    color: #2477e9;
+    word-break: break-all;
+    text-decoration: none;
+}
+
+.loginCardDupList .dupUrl:hover {
+    text-decoration: underline;
+}
+
+.loginCardDupList .dupMeta {
+    display: block;
+    color: #9ca3af;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
 .loadMoreSentinel {
     display: flex;
     align-items: center;
