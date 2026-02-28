@@ -1842,3 +1842,21 @@
     color: #94a3b8;
     font-size: 12px;
 }
+
+.assetLoadMoreBtn {
+    display: block;
+    width: 100%;
+    padding: 10px 0;
+    margin: 4px 0 0;
+    background: none;
+    border: 1px dashed #cbd5e1;
+    border-radius: 6px;
+    color: #2477e9;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.assetLoadMoreBtn:hover {
+    background: #f0f6ff;
+    border-color: #2477e9;
+}

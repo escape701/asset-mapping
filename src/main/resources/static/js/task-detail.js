@@ -662,7 +662,7 @@ function loadMoreHtml(shown, total) {
     </div>`;
 }
 
-// 为 resultContent 绑定滚动懒加载（只绑定一次）
+// 为 resultContent 绑定滚动懒加载和按钮点击加载（只绑定一次）
 let _scrollBound = false;
 function ensureScrollLoadMore() {
     const rc = document.getElementById('resultContent');
@@ -672,6 +672,10 @@ function ensureScrollLoadMore() {
         if (rc.scrollTop + rc.clientHeight >= rc.scrollHeight - 120) {
             appendNextPage();
         }
+    });
+    rc.addEventListener('click', (e) => {
+        const btn = e.target.closest('.assetLoadMoreBtn');
+        if (btn) handleAssetLoadMore(btn);
     });
 }
 
@@ -696,9 +700,6 @@ function appendNextPage() {
     } else if (currentTab === 'logins') {
         const grid = container.querySelector('.loginCardGrid');
         if (grid) grid.insertAdjacentHTML('beforeend', slice.map((page, i) => renderLoginCard(page, start + i)).join(''));
-    } else if (currentTab === 'assets') {
-        const ul = container.querySelector('#assetVisitedList');
-        if (ul) ul.insertAdjacentHTML('beforeend', slice.map(renderAssetVisitedItem).join(''));
     }
 
     if (sentinel) {
@@ -708,6 +709,46 @@ function appendNextPage() {
             sentinel.querySelector('span').textContent =
                 `已显示 ${state.rendered} / ${state.allItems.length} 条，滚动加载更多`;
         }
+    }
+}
+
+function loadMoreBtnHtml(type, shown, total) {
+    return `<button class="assetLoadMoreBtn" data-type="${type}" data-shown="${shown}">加载更多 (${shown}/${total})</button>`;
+}
+
+function handleAssetLoadMore(btn) {
+    const type = btn.dataset.type;
+    const shown = parseInt(btn.dataset.shown);
+    const domain = selectedDomain;
+    if (!domain) return;
+
+    let src, listId, renderFn;
+    if (type === 'visited') {
+        src = domain.crawl?.visited_pages || [];
+        listId = 'assetVisitedList';
+        renderFn = renderAssetVisitedItem;
+    } else if (type === 'discovered') {
+        src = domain.crawl?.discovered_urls || domain.discovery?.urls || [];
+        listId = 'assetDiscoveredList';
+        renderFn = renderAssetPendingItem;
+    } else if (type === 'failed') {
+        src = domain.crawl?.failed_urls || [];
+        listId = 'assetFailedList';
+        renderFn = renderAssetFailedItem;
+    } else {
+        return;
+    }
+
+    const next = src.slice(shown, shown + PAGE_SIZE);
+    const ul = document.getElementById(listId);
+    if (ul) ul.insertAdjacentHTML('beforeend', next.map(renderFn).join(''));
+
+    const newShown = shown + next.length;
+    if (newShown >= src.length) {
+        btn.remove();
+    } else {
+        btn.dataset.shown = newShown;
+        btn.textContent = `加载更多 (${newShown}/${src.length})`;
     }
 }
 
@@ -1082,7 +1123,6 @@ function renderResults() {
 
             if (visitedPages.length > 0) {
                 const firstSlice = visitedPages.slice(0, PAGE_SIZE);
-                tabRenderState.assets = { allItems: visitedPages, rendered: firstSlice.length };
 
                 assetContent += `
                     <div class="assetSection">
@@ -1095,11 +1135,28 @@ function renderResults() {
                         <ul class="resultList" id="assetVisitedList">
                             ${firstSlice.map(renderAssetVisitedItem).join('')}
                         </ul>
-                        ${loadMoreHtml(firstSlice.length, visitedPages.length)}
+                        ${visitedPages.length > PAGE_SIZE ? loadMoreBtnHtml('visited', firstSlice.length, visitedPages.length) : ''}
                     </div>
                 `;
-            } else {
-                tabRenderState.assets = { allItems: [], rendered: 0 };
+            }
+
+            if (discoveredUrls.length > 0) {
+                const discoveredSlice = discoveredUrls.slice(0, PAGE_SIZE);
+                assetContent += `
+                    <div class="assetSection">
+                        <h4 class="assetSectionTitle pending">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            已发现URL (${discoveredUrls.length})
+                        </h4>
+                        <ul class="resultList resultListCompact" id="assetDiscoveredList">
+                            ${discoveredSlice.map(renderAssetPendingItem).join('')}
+                        </ul>
+                        ${discoveredUrls.length > PAGE_SIZE ? loadMoreBtnHtml('discovered', discoveredSlice.length, discoveredUrls.length) : ''}
+                    </div>
+                `;
             }
 
             if (failedUrls.length > 0) {
@@ -1114,29 +1171,10 @@ function renderResults() {
                             </svg>
                             失败URL (${failedUrls.length})
                         </h4>
-                        <ul class="resultList">
+                        <ul class="resultList" id="assetFailedList">
                             ${failedSlice.map(renderAssetFailedItem).join('')}
                         </ul>
-                        ${failedUrls.length > PAGE_SIZE ? `<div class="loadMoreNote">仅显示前 ${PAGE_SIZE} 条</div>` : ''}
-                    </div>
-                `;
-            }
-
-            if (discoveredUrls.length > 0) {
-                const displayDiscovered = discoveredUrls.slice(0, PAGE_SIZE);
-                assetContent += `
-                    <div class="assetSection">
-                        <h4 class="assetSectionTitle pending">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                            已发现URL (${discoveredUrls.length})
-                            ${discoveredUrls.length > PAGE_SIZE ? `<span class="sectionNote">仅显示前${PAGE_SIZE}个</span>` : ''}
-                        </h4>
-                        <ul class="resultList resultListCompact">
-                            ${displayDiscovered.map(renderAssetPendingItem).join('')}
-                        </ul>
+                        ${failedUrls.length > PAGE_SIZE ? loadMoreBtnHtml('failed', failedSlice.length, failedUrls.length) : ''}
                     </div>
                 `;
             }
