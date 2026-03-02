@@ -223,6 +223,11 @@
     color: #9ca3af;
 }
 
+.domainMeta .login-count-highlight {
+    color: #16a34a;
+    font-weight: 600;
+}
+
 .domainStatusIcon {
     color: #9ca3af;
 }

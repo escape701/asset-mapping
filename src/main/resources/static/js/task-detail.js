@@ -585,7 +585,7 @@ function renderDomainList() {
             });
             subdomainCount = hosts.size;
         }
-        const loginCount = countUniqueLoginEntries(domain.crawl?.visited_pages);
+        const loginCount = extractLoginPages(domain.crawl?.visited_pages).length;
 
         // 计算资产路径数（已访问页面数）
         let assetCount = 0;
@@ -610,7 +610,7 @@ function renderDomainList() {
                 </div>
                 <div class="domainInfo">
                     <div class="domainName">${domain.domain}</div>
-                    <div class="domainMeta">${subdomainCount} 子域名 · ${loginCount} 登录口 · ${assetCount} 资产路径</div>
+                    <div class="domainMeta">${subdomainCount} 子域名 · <span class="login-count-highlight">${loginCount} 登录口</span> · ${assetCount} 资产路径</div>
                     ${hasError ? `<div class="domainError">⚠ 存在错误</div>` : ''}
                 </div>
                 <div class="domainStatusIcon ${domain.status}">${statusIcon}</div>
@@ -1118,8 +1118,7 @@ function renderResults() {
                         <div class="statsRow">
                             <span class="statItem"><strong>已发现:</strong> ${crawlStats.total_discovered || 0} URL</span>
                             <span class="statItem"><strong>已访问:</strong> ${crawlStats.total_visited || 0}</span>
-                            <span class="statItem"><strong>独立登录入口:</strong> ${allGroups.length}</span>
-                            ${totalDupCount > 0 ? `<span class="statItem"><strong>重复入口:</strong> ${totalDupCount}</span>` : ''}
+                            <span class="statItem"><strong>登录入口:</strong> ${allLoginPages.length}</span>
                             ${crawlStats.total_failed > 0 ? `<span class="statItem statFailed"><strong>失败:</strong> ${crawlStats.total_failed}</span>` : ''}
                         </div>
                     </div>
@@ -1648,11 +1647,10 @@ function buildContext() {
 
         const subdomains = domain.discovery?.subdomains || [];
         const loginPages = extractLoginPages(domain.crawl?.visited_pages);
-        const uniqueLoginCount = countUniqueLoginEntries(domain.crawl?.visited_pages);
         const stats = domain.crawl?.statistics || {};
 
         context += `子域名数: ${subdomains.length}\n`;
-        context += `独立登录入口数: ${uniqueLoginCount}${loginPages.length > uniqueLoginCount ? ` (含 ${loginPages.length - uniqueLoginCount} 个重复)` : ''}\n`;
+        context += `登录入口数: ${loginPages.length}\n`;
         context += `已发现URL: ${stats.total_discovered || 0}\n`;
         context += `已访问页面: ${stats.total_visited || 0}\n`;
         context += `失败数: ${stats.total_failed || 0}\n\n`;

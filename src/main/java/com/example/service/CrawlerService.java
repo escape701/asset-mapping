@@ -1501,6 +1501,8 @@ public class CrawlerService {
                 ".summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:32px}",
                 ".card{background:#fff;border-radius:12px;padding:20px;text-align:center;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,.04)}",
                 ".card-value{font-size:28px;font-weight:700;color:#2477e9}.card-label{font-size:13px;color:#6b7280;margin-top:4px}",
+                ".summary-login-card .card-value{color:#16a34a}.summary-login-card{border-color:#bbf7d0}",
+                ".login-stat-highlight{color:#16a34a;font-weight:600}",
 
                 ".domain-section{background:#fff;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:32px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:border-color .2s,box-shadow .2s}",
                 ".domain-section.active-domain{border-color:#2477e9;box-shadow:0 4px 16px rgba(36,119,233,.12)}",
@@ -1568,7 +1570,7 @@ public class CrawlerService {
                 ".filter-btn{padding:4px 12px;border-radius:16px;border:1px solid #e5e7eb;background:#fff;font-size:12px;cursor:pointer;transition:all .15s}",
                 ".filter-btn:hover{border-color:#2477e9;color:#2477e9}",
                 ".filter-btn.active{background:#2477e9;color:#fff;border-color:#2477e9}",
-                ".filter-reset{padding:4px 12px;border-radius:16px;border:1px solid #e5e7eb;background:#f8fafc;font-size:12px;cursor:pointer;color:#6b7280}",
+                ".filter-reset{padding:4px 12px;border-radius:16px;border:1px solid #e5e7eb;background:#f8fafc;font-size:12px;cursor:pointer;color:#6b7280;margin-left:auto}",
 
                 ".asset-list{padding:8px 0}",
                 ".asset-item{padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;font-size:13px}",
@@ -1641,19 +1643,18 @@ public class CrawlerService {
                 "  if(DATA.finishedAt)hdr+='<span>完成: '+fmtTime(DATA.finishedAt)+'</span>';",
                 "  hdr+='</div></div>';",
 
-                "  var totalSubs=0,totalLogins=0,totalDups=0,totalVisited=0;",
-                "  domainCache.forEach(function(c){totalSubs+=c.subs.length;totalLogins+=c.groups.length;totalDups+=c.totalDups;totalVisited+=c.vp.length;});",
+                "  var totalSubs=0,totalLogins=0,totalVisited=0;",
+                "  domainCache.forEach(function(c){totalSubs+=c.subs.length;totalLogins+=c.logins.length;totalVisited+=c.vp.length;});",
                 "  hdr+='<div class=\"summary-cards\">';",
                 "  hdr+='<div class=\"card\"><div class=\"card-value\">'+ds.length+'</div><div class=\"card-label\">域名</div></div>';",
                 "  hdr+='<div class=\"card\"><div class=\"card-value\">'+totalSubs+'</div><div class=\"card-label\">子域名</div></div>';",
-                "  hdr+='<div class=\"card\"><div class=\"card-value\">'+totalLogins+'</div><div class=\"card-label\">独立登录入口</div></div>';",
-                "  if(totalDups)hdr+='<div class=\"card\"><div class=\"card-value\">'+totalDups+'</div><div class=\"card-label\">重复入口</div></div>';",
+                "  hdr+='<div class=\"card summary-login-card\"><div class=\"card-value\">'+totalLogins+'</div><div class=\"card-label\">登录入口</div></div>';",
                 "  hdr+='<div class=\"card\"><div class=\"card-value\">'+totalVisited+'</div><div class=\"card-label\">已访问页面</div></div>';",
                 "  hdr+='</div>';",
 
                 "  var toc='<h3>域名目录</h3>';",
                 "  domainCache.forEach(function(c,i){",
-                "    toc+='<a href=\"#domain-'+i+'\" data-idx=\"'+i+'\">'+esc(c.d.domain)+'<span class=\"toc-count\">('+c.groups.length+')</span></a>';",
+                "    toc+='<a href=\"#domain-'+i+'\" data-idx=\"'+i+'\">'+esc(c.d.domain)+'<span class=\"toc-count\">('+c.logins.length+')</span></a>';",
                 "  });",
                 "  document.getElementById('toc').innerHTML=toc;",
 
@@ -1664,7 +1665,7 @@ public class CrawlerService {
                 "    main+='<h2>'+esc(c.d.domain)+'</h2>';",
                 "    main+='<div class=\"stats\">';",
                 "    main+='<span>子域名: '+c.subs.length+'</span>';",
-                "    main+='<span>登录: '+c.groups.length+(c.totalDups?' (+'+c.totalDups+'重复)':'')+'</span>';",
+                "    main+='<span class=\"login-stat-highlight\">登录: '+c.logins.length+'</span>';",
                 "    main+='<span>发现: '+c.discovered.length+'</span>';",
                 "    main+='<span>已访问: '+c.vp.length+'</span>';",
                 "    if(c.failed.length)main+='<span>失败: '+c.failed.length+'</span>';",
@@ -1675,7 +1676,7 @@ public class CrawlerService {
                 "    main+='<div class=\"sec-header\" data-sec=\"subs-'+idx+'\"><span class=\"sec-arrow\">▶</span> 子域名 ('+c.subs.length+')</div>';",
                 "    main+='<div class=\"sec-content\" id=\"sec-subs-'+idx+'\"></div>';",
 
-                "    main+='<div class=\"sec-header\" data-sec=\"logins-'+idx+'\"><span class=\"sec-arrow\">▶</span> 登录入口 ('+c.groups.length+(c.totalDups?' / +'+c.totalDups+'重复':'')+')</div>';",
+                "    main+='<div class=\"sec-header\" data-sec=\"logins-'+idx+'\"><span class=\"sec-arrow\">▶</span> 登录入口 ('+c.logins.length+')</div>';",
                 "    main+='<div class=\"sec-content\" id=\"sec-logins-'+idx+'\"></div>';",
 
                 "    var assetLabel='资产链接 (发现:'+c.discovered.length+' 访问:'+c.vp.length+(c.failed.length?' 失败:'+c.failed.length:'')+')';",
