@@ -919,12 +919,24 @@ function renderLoginGroup(group, groupIndex) {
 
     let dupSection = '';
     if (dups.length > 0) {
-        const dupItems = dups.map(d =>
-            `<li class="dupItem">
-                <a href="${d.url}" target="_blank" class="dupUrl" onclick="event.stopPropagation()">${d.url}</a>
-                <span class="dupMeta">${d.title || '无标题'} · ${d.status_code}</span>
-            </li>`
-        ).join('');
+        const dupItems = dups.map((d, dupIdx) => {
+            const dupSsUrl = getScreenshotUrl(d.screenshot_path);
+            const dupHasPopups = d.popup_login_screenshot_path && d.popup_login_screenshot_path.length > 0;
+            return `<li class="dupItem" onclick="event.stopPropagation(); openGroupScreenshot(${baseIdx + 1 + dupIdx})">
+                <div class="dupThumbWrap">
+                    ${dupSsUrl
+                ? `<img class="dupThumb" src="${dupSsUrl}" alt="${d.title || '登录页面'}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                           <div class="dupThumbPlaceholder" style="display:none;">暂无截图</div>`
+                : `<div class="dupThumbPlaceholder">暂无截图</div>`
+            }
+                    ${dupHasPopups ? `<span class="dupPopupBadge">+${d.popup_login_screenshot_path.length}弹窗</span>` : ''}
+                </div>
+                <div class="dupInfo">
+                    <a href="${d.url}" target="_blank" class="dupUrl" onclick="event.stopPropagation()">${d.url}</a>
+                    <span class="dupMeta">${d.title || '无标题'} · ${d.status_code}</span>
+                </div>
+            </li>`;
+        }).join('');
 
         dupSection = `
             <div class="loginCardDupBar" onclick="event.stopPropagation(); this.parentElement.classList.toggle('dupExpanded')">
@@ -1077,6 +1089,8 @@ function renderResults() {
         case 'logins': {
             const allLoginPages = extractLoginPages(selectedDomain.crawl?.visited_pages);
             const allGroups = groupLoginPages(allLoginPages);
+            const _confOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+            allGroups.sort((a, b) => (_confOrder[getConfidenceLevel(a.primary)] ?? 3) - (_confOrder[getConfidenceLevel(b.primary)] ?? 3));
             const primaryPages = allGroups.map(g => g.primary);
             const totalDupCount = allGroups.reduce((s, g) => s + g.duplicates.length, 0);
 
