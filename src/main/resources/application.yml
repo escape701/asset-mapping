@@ -33,7 +33,6 @@ crawler:
   python-path: python
   project-path: ../login_crawler
   task-output-base: ./crawler-output
-  config-template: config/combined/default.yaml
   config-template-step1: config/combined/lightweightxhstep1.yaml
   config-template-step2: config/combined/lightweightxhstep2.yaml
   # 并发控制

@@ -203,10 +203,21 @@ public class CrawlerService {
             log.info("已提交 {} 个域名任务到线程池，等待完成...", futures.size());
 
             try {
-                // 等待所有域名完成
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                        .get(5, TimeUnit.HOURS);
+            } catch (TimeoutException e) {
+                log.error("任务整体超时(5h), 取消剩余域名: {}", taskId);
+                appendToTaskLog(taskLogFile, "任务整体超时(5h)，正在终止剩余进程...");
+                for (Map.Entry<String, Process> entry : domainProcesses.entrySet()) {
+                    if (entry.getKey().startsWith(taskId + "_") && entry.getValue().isAlive()) {
+                        entry.getValue().destroyForcibly();
+                        log.warn("超时终止域名进程: {}", entry.getKey());
+                    }
+                }
+                futures.forEach(f -> f.cancel(true));
+            } catch (ExecutionException e) {
+                log.error("任务执行异常: {}", taskId, e.getCause());
             } finally {
-                // 关闭线程池
                 executorService.shutdown();
                 log.info("线程池已关闭");
             }
@@ -340,8 +351,18 @@ public class CrawlerService {
 
             readDomainProcessOutput(taskId, domain, process, domainOutputDir, taskLogFile);
 
-            // 7. 等待进程完成
-            int exitCode = process.waitFor();
+            // 7. 等待进程完成（最多 4 小时，防止单个域名卡死拖垮线程池）
+            boolean finished = process.waitFor(4, TimeUnit.HOURS);
+            int exitCode;
+            if (finished) {
+                exitCode = process.exitValue();
+            } else {
+                log.warn("域名爬取超时(4h), 强制终止: {}, 任务: {}", domain, taskId);
+                process.destroyForcibly();
+                process.waitFor(10, TimeUnit.SECONDS);
+                exitCode = -1;
+                appendToTaskLog(taskLogFile, String.format("[%s] 爬取超时(4h)，已强制终止", domain));
+            }
 
             // 8. 更新域名状态
             domainProcesses.remove(domainKey);

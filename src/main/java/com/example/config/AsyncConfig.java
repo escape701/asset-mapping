@@ -15,19 +15,19 @@ import java.util.concurrent.ThreadPoolExecutor;
 @Configuration
 @EnableAsync
 public class AsyncConfig {
-    
+
     @Value("${crawler.thread-pool.core-size:3}")
     private int corePoolSize;
-    
+
     @Value("${crawler.thread-pool.max-size:5}")
     private int maxPoolSize;
-    
+
     @Value("${crawler.thread-pool.queue-capacity:100}")
     private int queueCapacity;
-    
+
     @Value("${crawler.thread-pool.keep-alive-seconds:60}")
     private int keepAliveSeconds;
-    
+
     /**
      * 爬虫专用线程池
      * 用于并发执行多个域名的爬取任务
@@ -40,15 +40,14 @@ public class AsyncConfig {
         executor.setQueueCapacity(queueCapacity);
         executor.setKeepAliveSeconds(keepAliveSeconds);
         executor.setThreadNamePrefix("crawler-");
-        // 当队列满时，由调用线程执行任务（背压机制）
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         // 等待所有任务完成后再关闭
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(300);
         executor.initialize();
         return executor;
     }
-    
+
     /**
      * 默认异步线程池
      * 用于一般的异步任务
@@ -60,7 +59,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(50);
         executor.setThreadNamePrefix("async-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
         executor.initialize();

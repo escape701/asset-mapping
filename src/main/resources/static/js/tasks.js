@@ -172,34 +172,7 @@ async function submitTask() {
 
         if (createResult.code === 200) {
             const taskId = createResult.data.id || createResult.data.taskId;
-            showMessage('任务创建成功，正在启动...', 'success');
-
-            // 2. 自动启动任务
-            submitBtn.innerHTML = `
-                <svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32">
-                        <animate attributeName="stroke-dashoffset" values="32;0" dur="1s" repeatCount="indefinite"/>
-                    </circle>
-                </svg>
-                启动爬虫中...
-            `;
-
-            try {
-                const startResponse = await fetch(`/api/tasks/${taskId}/start?step=0`, {
-                    method: 'POST'
-                });
-
-                const startResult = await startResponse.json();
-
-                if (startResult.code === 200) {
-                    showMessage('任务已启动，爬虫正在运行', 'success');
-                } else {
-                    showMessage('任务已创建但启动失败: ' + (startResult.message || '未知错误'), 'warning');
-                }
-            } catch (startError) {
-                console.error('启动任务失败:', startError);
-                showMessage('任务已创建但启动失败，请手动启动', 'warning');
-            }
+            showMessage('任务创建成功，请在详情页执行 Step1/Step2', 'success');
 
             // 清空输入
             domainInput.value = '';
@@ -209,8 +182,11 @@ async function submitTask() {
             document.getElementById('uploadedFile').style.display = 'none';
             document.getElementById('uploadBox').style.display = 'flex';
 
-            // 刷新任务列表
+            // 刷新任务列表后跳转到任务详情页
             loadTasks();
+            setTimeout(() => {
+                window.location.href = `/tasks/${taskId}`;
+            }, 500);
         } else {
             showMessage(createResult.message || '任务创建失败', 'error');
         }
