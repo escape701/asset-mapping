@@ -49,6 +49,12 @@ public class CrawlerService {
     @Value("${crawler.config-template:config/combined/default.yaml}")
     private String configTemplate;
 
+    @Value("${crawler.config-template-step1:}")
+    private String configTemplateStep1;
+
+    @Value("${crawler.config-template-step2:}")
+    private String configTemplateStep2;
+
     @Value("${crawler.max-concurrent:3}")
     private int maxConcurrent;
 
@@ -119,6 +125,11 @@ public class CrawlerService {
      */
     @Async("taskExecutor")
     public void startCrawl(Task task, List<String> domains) {
+        startCrawl(task, domains, 0);
+    }
+
+    @Async("taskExecutor")
+    public void startCrawl(Task task, List<String> domains, int step) {
         // 重要：不要使用传入的 task 对象（它是脱管状态），而是通过 taskId 重新查询
         String taskId = task.getId();
 
@@ -172,14 +183,14 @@ public class CrawlerService {
             final Path finalTaskOutputDir = taskOutputDir;
             final Path finalTaskLogFile = taskLogFile;
 
+            final int finalStep = step;
             for (String domain : domains) {
                 final String finalDomain = domain;
                 log.info("提交域名爬取任务: {}", domain);
                 CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     try {
                         log.info("===== 开始执行域名: {} (线程: {}) =====", finalDomain, Thread.currentThread().getName());
-                        // 传递 taskId 而不是 Task 对象，避免多线程共享 JPA 实体
-                        crawlSingleDomain(finalTaskId, finalDomain, finalTaskOutputDir, finalTaskLogFile);
+                        crawlSingleDomain(finalTaskId, finalDomain, finalTaskOutputDir, finalTaskLogFile, finalStep);
                         log.info("===== 域名执行完成: {} =====", finalDomain);
                     } catch (Exception e) {
                         log.error("域名爬取异常: {} - {}", finalDomain, e.getMessage(), e);
@@ -251,7 +262,7 @@ public class CrawlerService {
      * 爬取单个域名
      * @param taskId 任务ID（不传递 Task 对象，避免多线程共享 JPA 实体）
      */
-    private void crawlSingleDomain(String taskId, String domain, Path taskOutputDir, Path taskLogFile) {
+    private void crawlSingleDomain(String taskId, String domain, Path taskOutputDir, Path taskLogFile, int step) {
         String domainKey = taskId + "_" + domain;
         log.info("crawlSingleDomain 开始, taskId: {}, domain: {}, 线程: {}", taskId, domain, Thread.currentThread().getName());
 
@@ -282,8 +293,8 @@ public class CrawlerService {
             Path domainInputFile = domainOutputDir.resolve("input.txt");
             Files.write(domainInputFile, Collections.singletonList(domain));
 
-            // 3. 生成配置文件
-            Path configFile = generateConfigForDomain(domain, domainInputFile, domainOutputDir);
+            // 3. 生成配置文件（output_dir 设为 taskOutputDir，Python 会自动在下面按域名创建子目录）
+            Path configFile = generateConfigForDomain(domain, domainInputFile, domainOutputDir, taskOutputDir, step);
 
             // 4. 更新 TaskDomain 状态
             taskDomain.setStatus(TaskDomain.STATUS_DISCOVERING);
@@ -369,20 +380,28 @@ public class CrawlerService {
     /**
      * 为单个域名生成配置文件
      */
-    private Path generateConfigForDomain(String domain, Path inputFile, Path outputDir) throws IOException {
-        // 读取模板配置
-        Path templatePath = Paths.get(crawlerProjectPath, configTemplate);
+    private Path generateConfigForDomain(String domain, Path inputFile, Path domainOutputDir, Path taskOutputDir, int step) throws IOException {
+        String selectedTemplate = configTemplate;
+        if (step == 1 && configTemplateStep1 != null && !configTemplateStep1.isEmpty()) {
+            selectedTemplate = configTemplateStep1;
+        } else if (step == 2 && configTemplateStep2 != null && !configTemplateStep2.isEmpty()) {
+            selectedTemplate = configTemplateStep2;
+        }
+        log.info("域名 {} 使用配置模板: {} (step={})", domain, selectedTemplate, step);
+
+        Path templatePath = Paths.get(crawlerProjectPath, selectedTemplate);
         String template = Files.readString(templatePath);
 
-        // 替换配置项 - 使用绝对路径以确保跨进程工作目录访问
+        // output_dir 设为 taskOutputDir（任务级目录），Python 会在其下按域名自动创建子目录
+        // 最终结构: {taskOutputDir}/{domain}/discovery.json — 与 readDiscoveryResult 的读取路径一致
         String config = template
                 .replace("domains_file: input.txt", "domains_file: " + inputFile.toAbsolutePath().toString().replace("\\", "/"))
-                .replace("output_dir: out/combined", "output_dir: " + outputDir.toAbsolutePath().toString().replace("\\", "/"))
+                .replace("output_dir: out/combined", "output_dir: " + taskOutputDir.toAbsolutePath().toString().replace("\\", "/"))
                 .replace("summary_output: out/combined/summary.json",
-                        "summary_output: " + outputDir.resolve("summary.json").toAbsolutePath().toString().replace("\\", "/"));
+                        "summary_output: " + domainOutputDir.resolve("summary.json").toAbsolutePath().toString().replace("\\", "/"));
 
         // 写入配置文件
-        Path configFile = outputDir.resolve("config.yaml");
+        Path configFile = domainOutputDir.resolve("config.yaml");
         Files.writeString(configFile, config);
 
         return configFile;

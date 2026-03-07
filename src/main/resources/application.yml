@@ -34,6 +34,8 @@ crawler:
   project-path: ../login_crawler
   task-output-base: ./crawler-output
   config-template: config/combined/default.yaml
+  config-template-step1: config/combined/lightweightxhstep1.yaml
+  config-template-step2: config/combined/lightweightxhstep2.yaml
   # 并发控制
   max-concurrent: 3  # 最大并发爬取域名数
   # 线程池配置

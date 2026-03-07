@@ -1989,6 +1989,65 @@ async function exportReport() {
     }
 }
 
+// 分步启动任务
+async function startTaskStep(step) {
+    const stepLabel = step === 1 ? '发现' : '爬取';
+    const btn = document.getElementById(step === 1 ? 'startStep1Btn' : 'startStep2Btn');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `
+            <svg class="spinning" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56"></path>
+            </svg>
+            ${stepLabel}中...
+        `;
+    }
+
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/start?step=${step}`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+
+        if (result.code === 200) {
+            if (typeof showMessage === 'function') {
+                showMessage(`Step${step} ${stepLabel}已启动`, 'success');
+            }
+            setTimeout(() => syncTaskProgress(), 2000);
+        } else {
+            if (typeof showMessage === 'function') {
+                showMessage(result.message || `启动${stepLabel}失败`, 'error');
+            }
+        }
+    } catch (error) {
+        console.error(`启动 Step${step} 失败:`, error);
+        if (typeof showMessage === 'function') {
+            showMessage(`启动${stepLabel}失败，请稍后重试`, 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            if (step === 1) {
+                btn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    Step1 发现
+                `;
+            } else {
+                btn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    Step2 爬取
+                `;
+            }
+        }
+    }
+}
+
 // 确认删除任务
 function confirmDeleteTask() {
     showConfirmModal(

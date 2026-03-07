@@ -182,11 +182,15 @@ public class TaskController {
 
     /**
      * 启动任务
+     * @param id 任务ID
+     * @param step 执行步骤: 0=默认(完整流程), 1=仅发现, 2=仅爬取
      */
     @PostMapping("/{id}/start")
-    public ResponseEntity<ApiResponse<TaskResponse>> start(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<TaskResponse>> start(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "0") int step) {
         try {
-            Task task = taskService.start(id);
+            Task task = taskService.start(id, step);
             return ResponseEntity.ok(ApiResponse.success(TaskResponse.fromEntity(task)));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
