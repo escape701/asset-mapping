@@ -204,10 +204,10 @@ public class CrawlerService {
 
             try {
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-                        .get(5, TimeUnit.HOURS);
+                        .get(96, TimeUnit.HOURS);
             } catch (TimeoutException e) {
-                log.error("任务整体超时(5h), 取消剩余域名: {}", taskId);
-                appendToTaskLog(taskLogFile, "任务整体超时(5h)，正在终止剩余进程...");
+                log.error("任务整体超时(96h), 取消剩余域名: {}", taskId);
+                appendToTaskLog(taskLogFile, "任务整体超时(96h)，正在终止剩余进程...");
                 for (Map.Entry<String, Process> entry : domainProcesses.entrySet()) {
                     if (entry.getKey().startsWith(taskId + "_") && entry.getValue().isAlive()) {
                         entry.getValue().destroyForcibly();
@@ -351,17 +351,17 @@ public class CrawlerService {
 
             readDomainProcessOutput(taskId, domain, process, domainOutputDir, taskLogFile);
 
-            // 7. 等待进程完成（最多 4 小时，防止单个域名卡死拖垮线程池）
-            boolean finished = process.waitFor(4, TimeUnit.HOURS);
+            // 7. 等待进程完成（最多 12 小时，防止单个域名卡死拖垮线程池）
+            boolean finished = process.waitFor(12, TimeUnit.HOURS);
             int exitCode;
             if (finished) {
                 exitCode = process.exitValue();
             } else {
-                log.warn("域名爬取超时(4h), 强制终止: {}, 任务: {}", domain, taskId);
+                log.warn("域名爬取超时(12h), 强制终止: {}, 任务: {}", domain, taskId);
                 process.destroyForcibly();
                 process.waitFor(10, TimeUnit.SECONDS);
                 exitCode = -1;
-                appendToTaskLog(taskLogFile, String.format("[%s] 爬取超时(4h)，已强制终止", domain));
+                appendToTaskLog(taskLogFile, String.format("[%s] 爬取超时(12h)，已强制终止", domain));
             }
 
             // 8. 更新域名状态
@@ -1217,6 +1217,31 @@ public class CrawlerService {
     }
 
     /**
+     * 判断文件中的 started_at 是否属于当前这轮任务执行（而非上一轮残留）。
+     * 如果文件的 started_at 早于任务的 startedAt，说明是旧数据。
+     */
+    private boolean isCurrentRunData(Map<String, Object> metadata, LocalDateTime taskStartedAt) {
+        if (taskStartedAt == null || metadata == null) {
+            return true;
+        }
+        Object startedAtObj = metadata.get("started_at");
+        if (startedAtObj == null) {
+            return true;
+        }
+        try {
+            String startedAtStr = startedAtObj.toString().trim();
+            if (startedAtStr.isEmpty()) {
+                return true;
+            }
+            LocalDateTime fileStartedAt = LocalDateTime.parse(startedAtStr.length() > 19
+                    ? startedAtStr.substring(0, 19) : startedAtStr);
+            return !fileStartedAt.isBefore(taskStartedAt.minusSeconds(5));
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /**
      * 手动同步任务进度（从文件读取并更新数据库）
      */
     @SuppressWarnings("unchecked")
@@ -1231,6 +1256,8 @@ public class CrawlerService {
         boolean processRunning = domainProcesses.entrySet().stream()
                 .filter(e -> e.getKey().startsWith(taskId + "_"))
                 .anyMatch(e -> e.getValue().isAlive());
+
+        LocalDateTime taskStartedAt = task.getStartedAt();
 
         int completedCount = 0;
         int failedCount = 0;
@@ -1248,6 +1275,9 @@ public class CrawlerService {
                 // 读取 discovery 结果
                 Map<String, Object> discovery = readDiscoveryResult(taskId, domain);
                 if (!discovery.isEmpty()) {
+                    Map<String, Object> discoveryMetadata = (Map<String, Object>) discovery.get("metadata");
+                    boolean discoveryIsCurrentRun = isCurrentRunData(discoveryMetadata, taskStartedAt);
+
                     List<?> subdomains = (List<?>) discovery.get("subdomains");
                     if (subdomains != null) {
                         taskDomain.setSubdomainCount(subdomains.size());
@@ -1256,8 +1286,8 @@ public class CrawlerService {
                     if (urls != null) {
                         taskDomain.setUrlCount(urls.size());
                     }
-                    // 只有非终态才更新状态
-                    if (!isTerminalState && TaskDomain.STATUS_PENDING.equals(currentStatus)) {
+                    // 只有非终态且为当前轮次数据才更新状态
+                    if (!isTerminalState && TaskDomain.STATUS_PENDING.equals(currentStatus) && discoveryIsCurrentRun) {
                         taskDomain.setStatus(TaskDomain.STATUS_DISCOVERING);
                     }
                 }
@@ -1266,53 +1296,52 @@ public class CrawlerService {
                 Map<String, Object> crawl = readCrawlResult(taskId, domain);
                 if (!crawl.isEmpty()) {
                     Map<String, Object> metadata = (Map<String, Object>) crawl.get("metadata");
+                    boolean crawlIsCurrentRun = isCurrentRunData(metadata, taskStartedAt);
                     boolean crawlFinished = false;
                     if (metadata != null) {
                         String landingUrl = (String) metadata.get("start_url");
                         if (landingUrl != null) {
                             taskDomain.setLandingUrl(landingUrl);
                         }
-                        // 检查 finished_at 字段判断爬取是否完成
                         Object finishedAt = metadata.get("finished_at");
                         crawlFinished = finishedAt != null && !finishedAt.toString().trim().isEmpty();
                     }
 
                     Map<String, Object> stats = (Map<String, Object>) crawl.get("statistics");
-                    if (stats != null) {
+                    if (crawlIsCurrentRun && stats != null) {
                         taskDomain.setVisitedCount(getIntValue(stats, "total_visited"));
                         taskDomain.setFailedCount(getIntValue(stats, "total_failed"));
                     }
 
                     // 计算登录页数量
-                    List<Map<String, Object>> visitedPages = (List<Map<String, Object>>) crawl.get("visited_pages");
-                    if (visitedPages != null) {
-                        int loginCount = 0;
-                        for (Map<String, Object> page : visitedPages) {
-                            if (isLoginPage(page.get("is_login_page"))) {
-                                loginCount++;
+                    if (crawlIsCurrentRun) {
+                        List<Map<String, Object>> visitedPages = (List<Map<String, Object>>) crawl.get("visited_pages");
+                        if (visitedPages != null) {
+                            int loginCount = 0;
+                            for (Map<String, Object> page : visitedPages) {
+                                if (isLoginPage(page.get("is_login_page"))) {
+                                    loginCount++;
+                                }
                             }
+                            taskDomain.setLoginCount(loginCount);
                         }
-                        taskDomain.setLoginCount(loginCount);
                     }
 
-                    // 只有非终态才更新状态
+                    // 只有非终态且为当前轮次数据才更新状态
                     if (!isTerminalState) {
-                        if (crawlFinished) {
+                        if (crawlIsCurrentRun && crawlFinished) {
                             taskDomain.setStatus(TaskDomain.STATUS_COMPLETED);
                             if (taskDomain.getFinishedAt() == null) {
                                 taskDomain.setFinishedAt(LocalDateTime.now());
                             }
-                        } else {
-                            // finished_at 为 null: 检查进程是否仍在运行
+                        } else if (crawlIsCurrentRun && !crawlFinished) {
                             String domainKey = taskId + "_" + domain;
                             Process domainProcess = domainProcesses.get(domainKey);
                             boolean domainProcessRunning = domainProcess != null && domainProcess.isAlive();
 
                             if (domainProcessRunning) {
                                 taskDomain.setStatus(TaskDomain.STATUS_CRAWLING);
-                            } else {
-                                // 进程不在了但 finished_at 为 null，说明被中断或异常退出
-                                // 有数据则标记为完成，无数据则标记为失败
+                            } else if (!processRunning) {
                                 int visited = getIntValue(stats != null ? stats : Collections.emptyMap(), "total_visited");
                                 if (visited > 0) {
                                     taskDomain.setStatus(TaskDomain.STATUS_COMPLETED);
@@ -1327,6 +1356,7 @@ public class CrawlerService {
                                 }
                             }
                         }
+                        // crawl 不是当前轮次数据：不更新域名状态，保持 pending
                     }
                 }
 

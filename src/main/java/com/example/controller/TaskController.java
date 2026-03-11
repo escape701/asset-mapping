@@ -39,11 +39,21 @@ public class TaskController {
     }
 
     /**
-     * 获取所有任务
+     * 获取所有任务（对 running/pending 任务自动同步文件进度）
      */
     @GetMapping
     public ResponseEntity<ApiResponse<List<TaskResponse>>> getAll() {
         List<Task> tasks = taskService.findAll();
+        for (Task task : tasks) {
+            if (Task.STATUS_RUNNING.equals(task.getStatus())
+                    || Task.STATUS_PENDING.equals(task.getStatus())) {
+                try {
+                    crawlerService.syncTaskProgress(task);
+                } catch (Exception e) {
+                    // sync 失败不影响列表返回
+                }
+            }
+        }
         List<TaskResponse> responses = tasks.stream()
                 .map(TaskResponse::fromEntity)
                 .collect(Collectors.toList());

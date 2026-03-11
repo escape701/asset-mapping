@@ -557,6 +557,13 @@ function renderTaskOverview() {
         : 0;
     document.getElementById('progressFill').style.width = `${progress}%`;
     document.getElementById('progressText').textContent = `${progress}%`;
+
+    // 运行中禁用 step 按钮，防止重复执行
+    const isRunning = taskData.status === 'running';
+    const step1Btn = document.getElementById('startStep1Btn');
+    const step2Btn = document.getElementById('startStep2Btn');
+    if (step1Btn) step1Btn.disabled = isRunning;
+    if (step2Btn) step2Btn.disabled = isRunning;
 }
 
 // 渲染域名列表
@@ -1853,6 +1860,8 @@ function handleTaskCompletion() {
     stopLogPolling();
     // 更新日志状态显示
     updateLogsStatus();
+    // 恢复 step 按钮（任务不再运行）
+    restoreStepButtons();
     // 如果不在日志标签页，刷新当前内容
     if (currentTab !== 'logs') {
         renderResults();
@@ -1991,8 +2000,39 @@ async function exportReport() {
 
 // 分步启动任务
 async function startTaskStep(step) {
+    // 运行中不允许再次启动
+    if (taskData && taskData.status === 'running') {
+        if (typeof showMessage === 'function') {
+            showMessage('任务正在运行中，请等待完成后再执行', 'error');
+        }
+        return;
+    }
+
+    // 如果任务已有数据（非 pending），弹出确认提示
+    const hasExistingData = taskData && (
+        taskData.status === 'completed' || taskData.status === 'failed' || taskData.status === 'stopped'
+        || taskData.completedDomains > 0
+        || taskData.domains?.some(d => d.status !== 'pending')
+    );
+
+    if (hasExistingData) {
+        const stepLabel = step === 1 ? '发现 (Discovery)' : '爬取 (Crawl)';
+        showConfirmModal(
+            `再次执行 Step${step}`,
+            `确定要再次执行 ${stepLabel} 吗？\n累积模式已开启，之前的数据不会丢失，新结果将与已有数据合并。进度条将重新开始计算。`,
+            () => doStartTaskStep(step),
+            false
+        );
+        return;
+    }
+
+    doStartTaskStep(step);
+}
+
+async function doStartTaskStep(step) {
     const stepLabel = step === 1 ? '发现' : '爬取';
     const btn = document.getElementById(step === 1 ? 'startStep1Btn' : 'startStep2Btn');
+    const otherBtn = document.getElementById(step === 1 ? 'startStep2Btn' : 'startStep1Btn');
 
     if (btn) {
         btn.disabled = true;
@@ -2003,6 +2043,7 @@ async function startTaskStep(step) {
             ${stepLabel}中...
         `;
     }
+    if (otherBtn) otherBtn.disabled = true;
 
     try {
         const response = await fetch(`/api/tasks/${taskId}/start?step=${step}`, {
@@ -2019,32 +2060,39 @@ async function startTaskStep(step) {
             if (typeof showMessage === 'function') {
                 showMessage(result.message || `启动${stepLabel}失败`, 'error');
             }
+            restoreStepButtons();
         }
     } catch (error) {
         console.error(`启动 Step${step} 失败:`, error);
         if (typeof showMessage === 'function') {
             showMessage(`启动${stepLabel}失败，请稍后重试`, 'error');
         }
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            if (step === 1) {
-                btn.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                    Step1 发现
-                `;
-            } else {
-                btn.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                    </svg>
-                    Step2 爬取
-                `;
-            }
-        }
+        restoreStepButtons();
+    }
+}
+
+function restoreStepButtons() {
+    const step1Btn = document.getElementById('startStep1Btn');
+    const step2Btn = document.getElementById('startStep2Btn');
+    const isRunning = taskData && taskData.status === 'running';
+    if (step1Btn) {
+        step1Btn.disabled = isRunning;
+        step1Btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            Step1 发现
+        `;
+    }
+    if (step2Btn) {
+        step2Btn.disabled = isRunning;
+        step2Btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            Step2 爬取
+        `;
     }
 }
 
